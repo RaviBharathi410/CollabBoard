@@ -1,0 +1,221 @@
+/* ========================================================================
+   CollabBoard — Global Design System
+   ======================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ── CSS Custom Properties ─────────────────────────────────────────────── */
+:root {
+  /* Brand */
+  --color-brand:             #6C63FF;
+  --color-brand-dark:        #5A52D5;
+  --color-brand-light:       #EEEDfe;
+  --color-brand-mid:         #8B85F0;
+
+  /* Backgrounds */
+  --color-bg-primary:        #FFFFFF;
+  --color-bg-secondary:      #F8F8FC;
+  --color-bg-tertiary:       #F0F0F8;
+
+  /* Text */
+  --color-text-primary:      #1A1A2E;
+  --color-text-secondary:    #4B5563;
+  --color-text-tertiary:     #9CA3AF;
+  --color-text-white:        #FFFFFF;
+
+  /* Borders */
+  --color-border:            #E5E7EB;
+  --color-border-light:      #F3F4F6;
+
+  /* CTAs */
+  --color-cta-primary-bg:    #6C63FF;
+  --color-cta-primary-text:  #FFFFFF;
+  --color-cta-secondary-bg:  #FFFFFF;
+  --color-cta-secondary-border: #6C63FF;
+  --color-cta-secondary-text:   #6C63FF;
+
+  /* Workspace dots */
+  --color-workspace-acme:    #8B85F0;
+  --color-workspace-product: #F87171;
+  --color-workspace-design:  #60A5FA;
+  --color-workspace-eng:     #34D399;
+
+  /* Shadows */
+  --color-shadow:            rgba(108, 99, 255, 0.12);
+  --color-shadow-neutral:    rgba(0, 0, 0, 0.06);
+
+  /* Layout */
+  --page-max-width:          1280px;
+  --navbar-height:           64px;
+  --sidebar-width:           240px;
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
+  overflow-x: hidden;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: none;
+}
+
+input {
+  font-family: inherit;
+  outline: none;
+}
+
+ul, ol {
+  list-style: none;
+}
+
+img, svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* ── Utility Classes ───────────────────────────────────────────────────── */
+.container {
+  width: 100%;
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  padding: 0 48px;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 0 24px;
+  }
+}
+
+/* ── Button Styles ─────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--color-cta-primary-bg);
+  color: var(--color-cta-primary-text);
+  padding: 10px 24px;
+  font-size: 0.9375rem;
+}
+
+.btn-primary:hover {
+  background: var(--color-brand-dark);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: var(--color-cta-secondary-bg);
+  color: var(--color-cta-secondary-text);
+  border: 1.5px solid var(--color-cta-secondary-border);
+  padding: 10px 24px;
+  font-size: 0.9375rem;
+}
+
+.btn-secondary:hover {
+  background: var(--color-brand-light);
+  transform: translateY(-1px);
+}
+
+.btn-text {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: 0.9375rem;
+  padding: 6px 4px;
+}
+
+.btn-text:hover {
+  color: var(--color-text-primary);
+}
+
+/* ── Input Styles ──────────────────────────────────────────────────────── */
+.input-field {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  font-size: 0.9375rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.input-field::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.input-field:focus {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+}
+
+/* ── Card Styles ───────────────────────────────────────────────────────── */
+.card {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(108,99,255,0.08);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(108,99,255,0.16);
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}

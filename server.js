@@ -1,21 +1,41 @@
+import 'dotenv/config';
 import { Server } from '@hocuspocus/server';
 import express from 'express';
 import cors from 'cors';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import admin from 'firebase-admin';
 import * as Y from 'yjs';
-import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import net from 'net';
+import { mountAIRoutes } from './server/ai/routes.js';
 
-dotenv.config();
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const tester = net
+      .createServer()
+      .once('error', () => resolve(false))
+      .once('listening', () => tester.close(() => resolve(true)))
+      .listen(port);
+  });
+}
+
+const DEBUG_LOG = path.resolve('debug-c2ad74.log');
+function serverLog(message, data, hypothesisId) {
+  try {
+    fs.appendFileSync(
+      DEBUG_LOG,
+      JSON.stringify({ sessionId: 'c2ad74', location: 'server.js', message, data, timestamp: Date.now(), hypothesisId, runId: 'post-fix-v2' }) + '\n'
+    );
+  } catch (_) { /* ignore */ }
+}
 
 // ── 0. Firebase Initialization ──
 let db = null;
 try {
-  // Try to parse the service account JSON from environment variable
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+      credential: admin.credential.cert(serviceAccount),
     });
     db = admin.firestore();
     console.log('🔥 Firebase Admin initialized successfully');
@@ -27,9 +47,13 @@ try {
 }
 
 // ── 1. Hocuspocus Multiplayer Server ──
+const HOCUSPOCUS_PORT = parseInt(process.env.HOCUSPOCUS_PORT || '1234', 10);
+
 const hocuspocusServer = new Server({
-  port: 1234,
+  port: HOCUSPOCUS_PORT,
   onConnect(data) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.documentName);
+    serverLog('client connected', { documentName: data.documentName, isUuid, isTemplateSlug: !isUuid }, 'H1');
     console.log(`🔌 Client connected to document: ${data.documentName}`);
   },
   onDisconnect(data) {
@@ -44,7 +68,13 @@ const hocuspocusServer = new Server({
         console.log(`📂 Loaded board ${data.documentName} from Firebase`);
       }
     } catch (err) {
-      console.error(`❌ Failed to load board ${data.documentName}:`, err);
+      if (err?.code === 7 || err?.reason === 'SERVICE_DISABLED') {
+        serverLog('firestore disabled', { documentName: data.documentName, reason: err.reason }, 'H8');
+        db = null;
+        console.warn('⚠️ Firestore API disabled — canvas sync will run in memory only.');
+      } else {
+        console.error(`❌ Failed to load board ${data.documentName}:`, err.message);
+      }
     }
     return data.document;
   },
@@ -58,118 +88,74 @@ const hocuspocusServer = new Server({
       );
       console.log(`💾 Saved board ${data.documentName} to Firebase`);
     } catch (err) {
-      console.error(`❌ Failed to save board ${data.documentName}:`, err);
+      if (err?.code === 7 || err?.reason === 'SERVICE_DISABLED') {
+        serverLog('firestore disabled on save', { documentName: data.documentName }, 'H8');
+        db = null;
+      } else {
+        console.error(`❌ Failed to save board ${data.documentName}:`, err.message);
+      }
     }
-  }
+  },
 });
-hocuspocusServer.listen();
-console.log('🚀 Hocuspocus WebSocket server running on ws://localhost:1234');
 
-// ── 2. Express AI Backend ──
+async function startHocuspocus() {
+  const available = await isPortAvailable(HOCUSPOCUS_PORT);
+  if (!available) {
+    console.warn(
+      `⚠️ WebSocket port ${HOCUSPOCUS_PORT} is already in use — skipping bind (another server instance is running).`
+    );
+    return;
+  }
+  try {
+    await hocuspocusServer.listen(HOCUSPOCUS_PORT);
+    console.log(`🚀 Hocuspocus WebSocket server running on ws://localhost:${HOCUSPOCUS_PORT}`);
+  } catch (err) {
+    console.error('❌ Hocuspocus failed to start:', err.message);
+  }
+}
+
+// ── 2. Express AI Backend (start first so /api/health always works) ──
 const app = express();
-app.use(cors());
+const PORT = parseInt(process.env.PORT || '3001', 10);
+
+app.use(
+  cors({
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    methods: ['GET', 'POST'],
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: '10mb' }));
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'DUMMY_KEY');
+mountAIRoutes(app);
 
-const SYSTEM_PROMPT = `You are an expert diagram interpretation engine for a collaborative whiteboard application called CollabBoard.
-
-Your task is to analyze rough hand-drawn sketches and convert them into a structured diagram representation.
-
-You MUST behave like a deterministic parser, NOT a chatbot.
-
-Your responsibilities:
-1. Detect diagram elements
-2. Detect relationships and connections
-3. Infer likely diagram intent
-4. Extract readable text labels
-5. Return STRICT JSON ONLY
-
-You are NOT allowed to:
-* Explain your reasoning
-* Add markdown
-* Add comments
-* Add natural language
-* Return anything outside valid JSON
-
-The user sketch may contain:
-* rectangles
-* circles
-* diamonds
-* arrows
-* cylinders/databases
-* text labels
-* freehand notes
-* UML-like structures
-* architecture diagrams
-* flowcharts
-* ER diagrams
-
-Interpret shapes intelligently based on context.
-
-CRITICAL RULES:
-* Never hallucinate extra nodes
-* Never invent labels not visually present
-* Preserve all detected relationships
-* Prefer simple structures over over-complicated assumptions
-* If uncertain, set confidence lower instead of guessing
-
-You MUST classify the diagram type as one of:
-* architecture
-* flowchart
-* erd
-* sequence
-* mindmap
-* unknown
-
-You MUST return output using the exact JSON schema provided:
-{
-  "type": "string",
-  "nodes": [
-    { "id": "string", "type": "rectangle|circle|database|diamond", "label": "string", "confidence": 0.0 }
-  ],
-  "edges": [
-    { "source": "node_id", "target": "node_id", "label": "string" }
-  ]
-}
-`;
-
-app.post('/api/analyze', async (req, res) => {
-  try {
-    const { imageBase64 } = req.body;
-    if (!imageBase64) return res.status(400).json({ error: 'No image provided' });
-
-    console.log('🤖 Received image for AI analysis...');
-
-    // Strip data header if present
-    const base64Data = imageBase64.replace(/^data:image\/(png|jpeg);base64,/, "");
-
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-
-    const result = await model.generateContent([
-      SYSTEM_PROMPT,
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType: 'image/png'
+async function main() {
+  const httpAvailable = await isPortAvailable(PORT);
+  if (!httpAvailable) {
+    console.warn(
+      `⚠️ Port ${PORT} is already in use — stop old servers (Ctrl+C / taskkill node) and run "npm run server" again to load latest code.`
+    );
+  } else {
+    await new Promise((resolve, reject) => {
+      const httpServer = app.listen(PORT, () => {
+        console.log(`🧠 AI Backend API running on http://localhost:${PORT}`);
+        resolve();
+      });
+      httpServer.on('error', (err) => {
+        if (err?.code === 'EADDRINUSE') {
+          console.error(
+            `❌ Port ${PORT} is already in use. Stop the other process (taskkill /F /IM node.exe) or set PORT=3002 in .env`
+          );
         }
-      }
-    ]);
-
-    const responseText = result.response.text();
-    
-    // Parse the JSON (stripping markdown backticks if Gemini accidentally adds them)
-    const jsonStr = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const data = JSON.parse(jsonStr);
-    
-    console.log(`✅ Successfully parsed diagram type: ${data.type}`);
-    res.json(data);
-  } catch (error) {
-    console.error('❌ AI Analysis Error:', error);
-    res.status(500).json({ error: 'Failed to parse diagram' });
+        reject(err);
+      });
+    });
   }
-});
 
-app.listen(3001, () => {
-  console.log('🧠 AI Backend API running on http://localhost:3001');
+  await startHocuspocus();
+}
+
+main().catch((err) => {
+  console.error('❌ Server startup failed:', err.message);
+  process.exit(1);
 });

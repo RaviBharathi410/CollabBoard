@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import * as Y from 'yjs';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import useCanvasStore from './useCanvasStore';
+import { setYjsDocument } from './yjsBridge';
+import { agentLog } from '../../debug/agentLog';
 
 // We assign a random color for the user's cursor
 const cursorColors = ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899'];
@@ -12,13 +14,21 @@ export default function useMultiplayer(documentName) {
   const [provider, setProvider] = useState(null);
   const [awareness, setAwareness] = useState(null);
   const [others, setOthers] = useState([]);
+  const [undoManager, setUndoManager] = useState(null);
+  const mountGen = useRef(0);
 
   useEffect(() => {
+    const gen = ++mountGen.current;
+    // #region agent log
+    agentLog('useMultiplayer.js:mount', 'multiplayer mount', { documentName: documentName || 'default-room' }, 'H6-H7', 'post-fix');
+    // #endregion
     const ydoc = new Y.Doc();
     const yshapes = ydoc.getMap('shapes');
+    setYjsDocument(ydoc);
 
+    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:1234';
     const newProvider = new HocuspocusProvider({
-      url: 'ws://localhost:1234',
+      url: wsUrl,
       name: documentName || 'default-room',
       document: ydoc,
     });
@@ -26,6 +36,10 @@ export default function useMultiplayer(documentName) {
     const newAwareness = newProvider.awareness;
     newAwareness.setLocalStateField('user', { name: myName, color: myColor });
     
+    // Create Yjs UndoManager tracking the shapes map
+    const newUndoManager = new Y.UndoManager(yshapes);
+    useCanvasStore.getState().setUndoManager(newUndoManager);
+
     setProvider(newProvider);
     setAwareness(newAwareness);
 
@@ -102,9 +116,24 @@ export default function useMultiplayer(documentName) {
     });
 
     return () => {
-      unsubscribeZustand();
-      newProvider.destroy();
-      ydoc.destroy();
+      const g = gen;
+      const cleanup = () => {
+        if (g !== mountGen.current) return;
+        // #region agent log
+        agentLog('useMultiplayer.js:unmount', 'multiplayer unmount', { documentName: documentName || 'default-room' }, 'H7', 'post-fix');
+        // #endregion
+        unsubscribeZustand();
+        newUndoManager.destroy();
+        try {
+          newProvider.destroy();
+        } catch {
+          /* already disconnected */
+        }
+        setYjsDocument(null);
+        ydoc.destroy();
+      };
+      // Defer so React Strict Mode remount can bump mountGen before we destroy
+      setTimeout(cleanup, 0);
     };
   }, [documentName]);
 
@@ -115,5 +144,5 @@ export default function useMultiplayer(documentName) {
     }
   };
 
-  return { provider, others, updateCursor };
+  return { provider, others, updateCursor, undoManager };
 }

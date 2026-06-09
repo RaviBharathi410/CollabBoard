@@ -1,9 +1,11 @@
 import { useRef, useEffect, useState } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Bell, FileText, Users, Building2, Zap, MoreHorizontal, Plus, LogOut } from 'lucide-react';
+import { Search, Bell, FileText, Users, Building2, Zap, MoreHorizontal, Plus, LogOut, Loader2 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
+import { getUserBoards, createBoard } from '../firebase/db';
+import { agentLog } from '../debug/agentLog';
 
 /* ── Count-up hook ──────────────────────────────────────────────────── */
 function useCountUp(target, duration = 1500) {
@@ -139,6 +141,43 @@ function StatCard({ icon: Icon, label, value, color }) {
 export default function DashboardPage() {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
+  const [userBoards, setUserBoards] = useState([]);
+  const [loadingBoards, setLoadingBoards] = useState(true);
+
+  useEffect(() => {
+    async function fetchBoards() {
+      if (currentUser?.uid) {
+        try {
+          const fetchedBoards = await getUserBoards(currentUser.uid);
+          setUserBoards(fetchedBoards);
+        } catch (error) {
+          console.error("Failed to fetch boards:", error);
+        } finally {
+          setLoadingBoards(false);
+        }
+      }
+    }
+    fetchBoards();
+  }, [currentUser]);
+
+  const handleNewBoard = async (title = 'Untitled Board') => {
+    try {
+      if (!currentUser?.uid) return;
+      // #region agent log
+      agentLog('DashboardPage.jsx:handleNewBoard', 'creating board', { title }, 'H1', 'post-fix-v2');
+      // #endregion
+      const newBoard = await createBoard(currentUser.uid, title);
+      // #region agent log
+      agentLog('DashboardPage.jsx:handleNewBoard', 'navigating to board', { boardId: newBoard.id, title }, 'H1', 'post-fix-v2');
+      // #endregion
+      navigate(`/board/${newBoard.id}`);
+    } catch (error) {
+      // #region agent log
+      agentLog('DashboardPage.jsx:handleNewBoard', 'create failed', { title, errorCode: error?.code, errorMessage: error?.message }, 'H8', 'post-fix-v2');
+      // #endregion
+      console.error("Failed to create board:", error);
+    }
+  };
 
   const displayName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'there';
 
@@ -184,23 +223,41 @@ export default function DashboardPage() {
           <a className="dash-view-all" href="#">View all</a>
         </div>
         <motion.div className="dash-boards" variants={stagger} initial="hidden" whileInView="show" viewport={{ once:true }}>
-          {boards.map((b) => {
-            const Thumb = b.Thumb;
-            return (
-              <motion.div key={b.name} variants={fadeUp} whileHover={{ y:-3, boxShadow:'0 8px 30px rgba(108,99,255,0.18)' }}>
-                <Link to={`/board/${b.name.toLowerCase().replace(/ /g, '-')}`} style={{ textDecoration: 'none' }} className="board-card">
-                  <div className="board-thumb"><Thumb /></div>
-                  <div className="board-info">
-                    <div className="board-info-left">
-                      <span className="board-name">{b.name}</span>
-                      <span className="board-time">{b.time}</span>
+          {loadingBoards ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '16px', color: 'var(--color-text-secondary)' }}>
+              <Loader2 size={16} className="animate-spin" /> Loading your boards...
+            </div>
+          ) : userBoards.length === 0 ? (
+            <div style={{ padding: '16px', color: 'var(--color-text-tertiary)' }}>
+              You don't have any boards yet. Create one to get started!
+            </div>
+          ) : (
+            userBoards.map((b) => {
+              // Format date nicely
+              const dateStr = b.updatedAt ? new Date(b.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Just now';
+              return (
+                <motion.div key={b.id} variants={fadeUp} whileHover={{ y:-3, boxShadow:'0 8px 30px rgba(108,99,255,0.18)' }}>
+                  <Link to={`/board/${b.id}`} style={{ textDecoration: 'none' }} className="board-card">
+                    <div className="board-thumb">
+                       {/* Placeholder generic thumbnail for now */}
+                       <svg viewBox="0 0 80 50" fill="none" style={{width:'40px',height:'auto', opacity: 0.5}}>
+                          <rect x="10" y="5" width="25" height="14" rx="3" fill="#6C63FF" opacity=".2" stroke="#6C63FF" strokeWidth=".8"/>
+                          <rect x="45" y="5" width="25" height="14" rx="3" fill="#6C63FF" opacity=".2" stroke="#6C63FF" strokeWidth=".8"/>
+                          <line x1="35" y1="12" x2="45" y2="12" stroke="#6C63FF" strokeWidth=".8"/>
+                       </svg>
                     </div>
-                    <button className="board-menu" onClick={(e) => e.preventDefault()}><MoreHorizontal size={16} color="var(--color-text-tertiary)"/></button>
-                  </div>
-                </Link>
-              </motion.div>
-            );
-          })}
+                    <div className="board-info">
+                      <div className="board-info-left">
+                        <span className="board-name">{b.title}</span>
+                        <span className="board-time">Updated {dateStr}</span>
+                      </div>
+                      <button className="board-menu" onClick={(e) => e.preventDefault()}><MoreHorizontal size={16} color="var(--color-text-tertiary)"/></button>
+                    </div>
+                  </Link>
+                </motion.div>
+              );
+            })
+          )}
         </motion.div>
 
         {/* Templates */}
@@ -210,17 +267,24 @@ export default function DashboardPage() {
         </div>
         <motion.div className="dash-templates" variants={stagger} initial="hidden" whileInView="show" viewport={{ once:true }}>
           <motion.div variants={fadeUp}>
-            <Link to="/board/untitled" style={{ textDecoration: 'none' }} className="template-card template-blank">
+            <div onClick={() => handleNewBoard()} style={{ textDecoration: 'none', cursor: 'pointer' }} className="template-card template-blank">
               <Plus size={24} color="var(--color-text-tertiary)" />
               <span className="template-label">Blank Board</span>
-            </Link>
+            </div>
           </motion.div>
           {templates.map(t => (
             <motion.div key={t} variants={fadeUp} whileHover={{ y:-2 }}>
-              <Link to={`/board/${t.toLowerCase().replace(/ /g, '-')}`} style={{ textDecoration: 'none' }} className="template-card">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => handleNewBoard(t)}
+                onKeyDown={(e) => e.key === 'Enter' && handleNewBoard(t)}
+                style={{ textDecoration: 'none', cursor: 'pointer' }}
+                className="template-card"
+              >
                 <div className="template-thumb"><TemplateMiniSVG name={t} /></div>
                 <span className="template-label">{t}</span>
-              </Link>
+              </div>
             </motion.div>
           ))}
         </motion.div>
@@ -268,6 +332,8 @@ export default function DashboardPage() {
         .template-blank { border-style:dashed; border-width:2px; justify-content:center; min-height:100px; }
         .template-thumb { width:100%; height:60px; display:flex; align-items:center; justify-content:center; }
         .template-label { font-size:0.75rem; font-weight:600; color:var(--color-text-secondary); text-align:center; }
+        .animate-spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
         @media (max-width:1100px) { .dash-boards { grid-template-columns:repeat(2,1fr); } .dash-templates { grid-template-columns:repeat(3,1fr); } .dash-stats { grid-template-columns:repeat(2,1fr); } }
         @media (max-width:768px) { .dash-main { margin-left:0; } .dash-boards { grid-template-columns:1fr; } .dash-templates { grid-template-columns:repeat(2,1fr); } .dash-stats { grid-template-columns:1fr; } }

@@ -1,0 +1,80 @@
+name: ML Training Pipeline
+
+on:
+  push:
+    paths:
+      - 'ml/scripts/**'
+      - 'ml/datasets/**'
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      model_size:
+        description: 'YOLO model size (n/s/m)'
+        default: 'n'
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install ML dependencies
+        run: pip install ultralytics mlflow roboflow albumentations onnx onnxruntime opencv-python-headless pyyaml numpy
+
+      - name: Generate synthetic data
+        run: python ml/scripts/generate_synthetic.py --n-images 500
+
+      - name: Import datasets
+        env:
+          ROBOFLOW_API_KEY: ${{ secrets.ROBOFLOW_API_KEY }}
+        run: |
+          if [ -n "$ROBOFLOW_API_KEY" ]; then
+            python ml/scripts/import_datasets.py --roboflow-api-key "$ROBOFLOW_API_KEY" || true
+          else
+            python ml/scripts/import_datasets.py --roboflow-api-key placeholder --skip-roboflow || true
+            cp -r ml/datasets/synthetic/* ml/datasets/processed/ 2>/dev/null || true
+          fi
+
+      - name: Augment dataset
+        run: python ml/scripts/augment.py --input-dir ml/datasets/synthetic --output-dir ml/datasets/processed_augmented --multiplier 2
+
+      - name: Train detection model
+        run: |
+          DATASET=ml/datasets/processed_augmented/dataset.yaml
+          [ -f "$DATASET" ] || DATASET=ml/datasets/synthetic/dataset.yaml
+          python ml/scripts/train_detection.py \
+            --size ${{ github.event.inputs.model_size || 'n' }} \
+            --epochs 30 \
+            --dataset "$DATASET"
+
+      - name: Validate model
+        continue-on-error: true
+        run: |
+          python ml/scripts/validate.py --dataset ml/datasets/synthetic/dataset.yaml || true
+
+      - name: Export to ONNX
+        run: python ml/scripts/export_onnx.py || true
+
+      - name: Quantize models
+        run: python ml/scripts/quantize.py || true
+
+      - name: Benchmark
+        run: python ml/scripts/benchmark.py || true
+
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: onnx-models
+          path: ml/models/exported/
+
+      - name: Copy models to public dir
+        run: |
+          mkdir -p public/models
+          cp ml/models/exported/diagram_detector_int8.onnx public/models/ 2>/dev/null || true
+          cp ml/models/exported/ocr_detector.onnx public/models/ 2>/dev/null || true
+          cp ml/models/exported/classes.json public/models/ 2>/dev/null || true

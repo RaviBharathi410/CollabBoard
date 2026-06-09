@@ -4,6 +4,7 @@ import {
   LayoutGrid, Plus, Home, Clock, Star, Users,
   LayoutTemplate, Trash2, Settings
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { icon: Home, label: 'Home', id: 'home' },
@@ -22,6 +23,11 @@ const workspaces = [
 ];
 
 export default function Sidebar({ activePage = 'home' }) {
+  const { currentUser } = useAuth();
+  const displayName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User';
+  const email = currentUser?.email || '';
+  const initial = displayName.charAt(0).toUpperCase();
+
   return (
     <aside className="sidebar">
       {/* Logo */}
@@ -85,10 +91,10 @@ export default function Sidebar({ activePage = 'home' }) {
 
       {/* User Profile */}
       <div className="sidebar-user">
-        <div className="sidebar-user-avatar">JD</div>
+        <div className="sidebar-user-avatar">{initial}</div>
         <div className="sidebar-user-info">
-          <span className="sidebar-user-name">John Doe</span>
-          <span className="sidebar-user-email">john@example.com</span>
+          <span className="sidebar-user-name">{displayName}</span>
+          <span className="sidebar-user-email">{email}</span>
         </div>
       </div>
 

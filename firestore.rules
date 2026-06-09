@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /boards_meta/{boardId} {
+      allow read, update, delete: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+    }
+
+    // Yjs canvas binary state — server Admin SDK only
+    match /boards/{boardId} {
+      allow read, write: if false;
+
+      match /aiFeedback/{feedbackId} {
+        allow create: if request.auth != null;
+        allow read: if request.auth.uid == resource.data.ownerId;
+      }
+    }
+
+    match /aiSessions/{sessionId} {
+      allow read, write: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+    }
+  }
+}

@@ -1,0 +1,20 @@
+ultralytics==8.2.0
+paddlepaddle-gpu==2.6.1; sys_platform != "darwin"
+paddlepaddle==2.6.1; sys_platform == "darwin"
+paddleocr==2.7.3
+paddle2onnx==1.2.3
+onnx==1.16.0
+onnxruntime==1.18.0
+onnxconverter-common==1.13.0
+albumentations==1.4.3
+opencv-python==4.9.0.80
+numpy==1.26.4
+mlflow==2.11.0
+roboflow==1.1.30
+dvc==3.49.0
+pyyaml==6.0.1
+matplotlib==3.8.4
+seaborn==0.13.2
+torch==2.2.2
+torchvision==0.17.2
+Pillow>=10.0.0

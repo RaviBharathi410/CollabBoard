@@ -1,0 +1,3 @@
+
+# Place diagram_detector_int8.onnx and ocr_detector.onnx here after training.
+# Run: python ml/scripts/export_onnx.py && python ml/scripts/quantize.py

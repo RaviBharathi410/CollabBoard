@@ -1,0 +1,16 @@
+{
+  "classes": [
+    "rectangle",
+    "circle",
+    "database",
+    "diamond",
+    "actor",
+    "cloud",
+    "cylinder",
+    "arrow",
+    "text_region",
+    "sticky_note",
+    "group_boundary"
+  ],
+  "nc": 11
+}

@@ -1,10 +1,11 @@
 import React from 'react';
-import { MousePointer2, Hand, Square, Circle, Minus, PenTool, Type, Undo, Redo } from 'lucide-react';
+import { MousePointer2, Hand, Square, Circle, Minus, PenTool, Type, Undo, Redo, Scan } from 'lucide-react';
 import useCanvasStore from '../hooks/useCanvasStore';
 
 const tools = [
   { id: 'select', icon: MousePointer2, label: 'Select (V)' },
   { id: 'hand', icon: Hand, label: 'Pan (H)' },
+  { id: 'marquee', icon: Scan, label: 'Region select (M)' },
   { id: 'rectangle', icon: Square, label: 'Rectangle (R)' },
   { id: 'circle', icon: Circle, label: 'Circle (O)' },
   { id: 'arrow', icon: Minus, label: 'Arrow (A)' },
@@ -17,8 +18,24 @@ export default function Toolbar() {
   const setActiveTool = useCanvasStore((state) => state.setActiveTool);
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
-  const _history = useCanvasStore((state) => state._history);
-  const _historyIndex = useCanvasStore((state) => state._historyIndex);
+  const undoManager = useCanvasStore((state) => state.undoManager);
+  
+  // Force update when stack changes
+  const [, setTick] = React.useState(0);
+  React.useEffect(() => {
+    if (undoManager) {
+      const listener = () => setTick(t => t + 1);
+      undoManager.on('stack-item-added', listener);
+      undoManager.on('stack-item-popped', listener);
+      return () => {
+        undoManager.off('stack-item-added', listener);
+        undoManager.off('stack-item-popped', listener);
+      }
+    }
+  }, [undoManager]);
+
+  const canUndo = undoManager && undoManager.undoStack.length > 0;
+  const canRedo = undoManager && undoManager.redoStack.length > 0;
 
   return (
     <div className="canvas-toolbar">
@@ -46,8 +63,8 @@ export default function Toolbar() {
           className="tool-btn" 
           title="Undo" 
           onClick={undo} 
-          disabled={_historyIndex < 0}
-          style={{ opacity: _historyIndex < 0 ? 0.4 : 1 }}
+          disabled={!canUndo}
+          style={{ opacity: !canUndo ? 0.4 : 1 }}
         >
           <Undo size={18} />
         </button>
@@ -55,8 +72,8 @@ export default function Toolbar() {
           className="tool-btn" 
           title="Redo" 
           onClick={redo} 
-          disabled={_historyIndex >= _history.length - 1}
-          style={{ opacity: _historyIndex >= _history.length - 1 ? 0.4 : 1 }}
+          disabled={!canRedo}
+          style={{ opacity: !canRedo ? 0.4 : 1 }}
         >
           <Redo size={18} />
         </button>

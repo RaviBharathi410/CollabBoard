@@ -1,0 +1,3 @@
+experiment_name: collabboard-diagram-detector
+tracking_uri: ./ml/mlruns
+artifact_location: ./ml/models/checkpoints

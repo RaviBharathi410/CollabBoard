@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Lock, User, Loader2 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, formatAuthError } from '../context/AuthContext';
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -11,15 +11,20 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { login, signup, loginWithGoogle, currentUser } = useAuth();
+  const { login, signup, loginWithGoogle, currentUser, authError, setAuthError } = useAuth();
   const navigate = useNavigate();
 
   // If already logged in, redirect to dashboard
   useEffect(() => {
     if (currentUser) {
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     }
   }, [currentUser, navigate]);
+
+  // Show redirect-flow errors from AuthProvider (e.g. returning from Google)
+  useEffect(() => {
+    if (authError) setError(authError);
+  }, [authError]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,12 +47,19 @@ export default function AuthPage() {
 
   const handleGoogleAuth = async () => {
     setError('');
+    setAuthError(null);
     setLoading(true);
     try {
-      await loginWithGoogle();
-      navigate('/dashboard');
+      const result = await loginWithGoogle();
+      // signInWithRedirect leaves the page — no navigate here
+      if (result?.user) {
+        navigate('/dashboard', { replace: true });
+      }
     } catch (err) {
-      setError(err.message || 'Failed to authenticate with Google');
+      const msg = formatAuthError(err);
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }

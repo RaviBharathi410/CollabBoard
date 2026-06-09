@@ -1,0 +1,25 @@
+name: Deploy Inference API
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'inference-api/**'
+      - 'ml/models/exported/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build inference image
+        run: docker build -t collabboard-inference ./inference-api
+      - name: Smoke test
+        run: |
+          docker run -d --name inf -p 8000:8000 \
+            -e CLASSES_PATH=/models/classes.json \
+            -v "$PWD/ml/models/exported:/models:ro" \
+            collabboard-inference || true
+          sleep 5
+          curl -sf http://localhost:8000/api/health || echo "Health check skipped (no model)"

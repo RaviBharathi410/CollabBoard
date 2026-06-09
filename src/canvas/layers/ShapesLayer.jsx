@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layer, Rect, Ellipse, Arrow, Line, Text, Transformer } from 'react-konva';
+import { Layer, Rect, Ellipse, Arrow, Line, Text, Transformer, Group } from 'react-konva';
 import useCanvasStore from '../hooks/useCanvasStore';
 
 export default function ShapesLayer({ selectedIds, onSelect }) {
@@ -57,11 +57,24 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
     updateShape(shape.id, { x: e.target.x(), y: e.target.y() });
   };
 
+  const AiBadge = ({ shape, width = 80, height = 40 }) => {
+    if (!shape.aiGenerated) return null;
+    const bx = (shape.width ?? width) - 4;
+    const by = 4;
+    return (
+      <Group x={bx} y={by} listening={false}>
+        <Rect x={-28} y={0} width={28} height={14} fill="#6C63FF" cornerRadius={3} />
+        <Text x={-26} y={2} text="✦ AI" fontSize={9} fill="#fff" fontFamily="Plus Jakarta Sans" />
+      </Group>
+    );
+  };
+
   const commonProps = (shape) => ({
     id: shape.id,
     x: shape.x,
     y: shape.y,
     draggable: true,
+    opacity: shape.opacity ?? 1,
     onClick: () => onSelect(shape.id),
     onTap: () => onSelect(shape.id),
     onDragMove: (e) => handleDragMove(e, shape),
@@ -74,28 +87,32 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
       {shapes.map((shape) => {
         if (shape.type === 'rectangle') {
           return (
-            <Rect
-              key={shape.id}
-              {...commonProps(shape)}
-              width={shape.width}
-              height={shape.height}
-              fill={shape.fill || '#EEEDfe'}
-              stroke={shape.stroke || '#6C63FF'}
-              strokeWidth={shape.strokeWidth || 2}
-            />
+            <Group key={shape.id} {...commonProps(shape)}>
+              <Rect
+                width={shape.width}
+                height={shape.height}
+                fill={shape.fill || '#EEEDfe'}
+                stroke={shape.stroke || '#6C63FF'}
+                strokeWidth={shape.strokeWidth || 2}
+              />
+              <AiBadge shape={shape} width={shape.width} height={shape.height} />
+            </Group>
           );
         }
         if (shape.type === 'circle') {
+          const rx = shape.radiusX || 40;
+          const ry = shape.radiusY || 40;
           return (
-            <Ellipse
-              key={shape.id}
-              {...commonProps(shape)}
-              radiusX={shape.radiusX}
-              radiusY={shape.radiusY}
-              fill={shape.fill || '#FEF3C7'}
-              stroke={shape.stroke || '#F59E0B'}
-              strokeWidth={shape.strokeWidth || 2}
-            />
+            <Group key={shape.id} {...commonProps(shape)}>
+              <Ellipse
+                radiusX={rx}
+                radiusY={ry}
+                fill={shape.fill || '#EEEDfe'}
+                stroke={shape.stroke || '#6C63FF'}
+                strokeWidth={shape.strokeWidth || 2}
+              />
+              <AiBadge shape={shape} width={rx * 2} height={ry * 2} />
+            </Group>
           );
         }
         if (shape.type === 'arrow') {
@@ -107,6 +124,7 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
               stroke={shape.stroke || '#1A1A2E'}
               strokeWidth={shape.strokeWidth || 2}
               fill={shape.stroke || '#1A1A2E'}
+              dash={shape.dash}
               pointerLength={10}
               pointerWidth={10}
             />

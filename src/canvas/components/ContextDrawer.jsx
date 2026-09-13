@@ -314,6 +314,8 @@ export default function ContextDrawer({
               importMeta={importHook.importMeta}
               highPrecision={importHook.highPrecision}
               setHighPrecision={importHook.setHighPrecision}
+              engine={importHook.engine}
+              setEngine={importHook.setEngine}
               onUpdateElement={importHook.updateElement}
               onCommit={importHook.commitToCanvas}
               onClear={importHook.clearPreview}

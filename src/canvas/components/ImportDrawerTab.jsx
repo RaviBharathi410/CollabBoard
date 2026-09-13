@@ -21,6 +21,8 @@ export default function ImportDrawerTab({
   importMeta = null,
   highPrecision = false,
   setHighPrecision,
+  engine = 'cloud',
+  setEngine,
   onUpdateElement,
   onCommit,
   onClear,
@@ -28,6 +30,7 @@ export default function ImportDrawerTab({
   const [dragOver, setDragOver] = useState(false);
   const [textInput, setTextInput] = useState('');
   const [mode, setMode] = useState('file'); // 'file' | 'text'
+  const [lastFile, setLastFile] = useState(null);
   const fileInputRef = useRef(null);
 
   const handleFileDrop = (e) => {
@@ -35,14 +38,23 @@ export default function ImportDrawerTab({
     setDragOver(false);
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      onImportFile(file);
+      setLastFile(file);
+      onImportFile(file, engine);
     }
   };
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      onImportFile(file);
+      setLastFile(file);
+      onImportFile(file, engine);
+    }
+  };
+
+  const handleReanalyzeWithAI = () => {
+    if (lastFile) {
+      setEngine?.('cloud');
+      onImportFile(lastFile, 'cloud');
     }
   };
 
@@ -162,27 +174,71 @@ export default function ImportDrawerTab({
                   SVG Shapes
                 </span>
                 <span style={{ fontSize: '11px', background: '#FEF3C7', color: '#B45309', padding: '2px 8px', borderRadius: '12px', fontWeight: 500 }}>
-                  Whiteboard Photos
+                  Whiteboard / UML Photos
                 </span>
               </div>
 
-              {/* High Precision Mode Toggle for Images */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#F9FAFB', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#1F2937', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Sparkles size={14} color="#6C63FF" />
-                    High Precision Mode
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#6B7280' }}>
-                    Two-pass verification for low-contrast whiteboard photos
-                  </div>
+              {/* Image Recognition Engine Selector */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', background: '#F9FAFB', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Image Recognition Engine
                 </div>
-                <input
-                  type="checkbox"
-                  checked={highPrecision}
-                  onChange={(e) => setHighPrecision(e.target.checked)}
-                  style={{ width: '16px', height: '16px', accentColor: '#6C63FF', cursor: 'pointer' }}
-                />
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setEngine?.('cloud')}
+                    style={{
+                      flex: 1,
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      border: engine === 'cloud' ? '1.5px solid #6C63FF' : '1px solid #D1D5DB',
+                      background: engine === 'cloud' ? '#EEEDFE' : '#FFFFFF',
+                      color: engine === 'cloud' ? '#4F46E5' : '#4B5563',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '2px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Sparkles size={13} color="#4F46E5" />
+                      AI Vision (Recommended)
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#6B7280', fontWeight: 400 }}>
+                      UML, Architecture, Tables
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEngine?.('local')}
+                    style={{
+                      flex: 1,
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      border: engine === 'local' ? '1.5px solid #6C63FF' : '1px solid #D1D5DB',
+                      background: engine === 'local' ? '#EEEDFE' : '#FFFFFF',
+                      color: engine === 'local' ? '#4F46E5' : '#4B5563',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '2px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <span>Classical CV</span>
+                    <span style={{ fontSize: '10px', color: '#6B7280', fontWeight: 400 }}>
+                      Fast Offline Line-Art
+                    </span>
+                  </button>
+                </div>
               </div>
             </>
           ) : (
@@ -353,8 +409,35 @@ export default function ImportDrawerTab({
             </div>
           )}
 
+          {/* Re-analyze with AI Vision Banner if local CV was used */}
+          {lastFile && (importMeta?.modelUsed === 'local-cv-pipeline' || importMeta?.format === 'raster_image') && (
+            <button
+              type="button"
+              onClick={handleReanalyzeWithAI}
+              disabled={isImporting}
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                background: '#EEEDFE',
+                border: '1px solid #C7D2FE',
+                borderRadius: '8px',
+                color: '#4338CA',
+                fontWeight: 600,
+                fontSize: '12px',
+                cursor: isImporting ? 'wait' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+              }}
+            >
+              <Sparkles size={14} color="#6366F1" />
+              <span>{isImporting ? 'Enhancing with AI Vision...' : '✨ Enhance with AI Vision (Gemini / GPT-4o)'}</span>
+            </button>
+          )}
+
           {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
             <button
               type="button"
               onClick={onCommit}

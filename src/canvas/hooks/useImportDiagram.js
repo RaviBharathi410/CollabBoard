@@ -21,12 +21,13 @@ export default function useImportDiagram(stageRef) {
   const [previewDiagram, setPreviewDiagram] = useState(null);
   const [importMeta, setImportMeta] = useState(null);
   const [highPrecision, setHighPrecision] = useState(false);
+  const [engine, setEngine] = useState('cloud'); // 'cloud' (GPT-4o/Gemini) | 'local' (FastAPI CV)
 
   /**
    * Imports a diagram from a File object (.drawio, .svg, .mmd, .png, .jpg, etc.)
    */
   const importFile = useCallback(
-    async (file) => {
+    async (file, engineOverride) => {
       if (!file) return;
       setIsImporting(true);
       setError(null);
@@ -46,6 +47,7 @@ export default function useImportDiagram(stageRef) {
           }
         });
 
+        const activeEngine = engineOverride || engine;
         const headers = await getAuthHeaders();
         const res = await fetch(`${API_BASE}/api/import/file`, {
           method: 'POST',
@@ -55,6 +57,7 @@ export default function useImportDiagram(stageRef) {
             content,
             enableHighPrecision: highPrecision,
             enablePreprocessing: true,
+            engine: activeEngine,
           }),
         });
 
@@ -70,6 +73,7 @@ export default function useImportDiagram(stageRef) {
           format: data.format,
           isStructured: data.isStructured,
           preprocessing: data.preprocessing,
+          modelUsed: data.modelUsed,
         });
       } catch (err) {
         console.error('[useImportDiagram] Error importing file:', err);
@@ -78,7 +82,7 @@ export default function useImportDiagram(stageRef) {
         setIsImporting(false);
       }
     },
-    [highPrecision]
+    [highPrecision, engine]
   );
 
   /**
@@ -391,6 +395,8 @@ export default function useImportDiagram(stageRef) {
     importMeta,
     highPrecision,
     setHighPrecision,
+    engine,
+    setEngine,
     importFile,
     importText,
     updateElement,

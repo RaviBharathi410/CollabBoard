@@ -40,39 +40,74 @@ async function proxyToInferenceAPI(imageBase64, options = {}) {
 
 /**
  * Unified raster image processor:
- * 1. Tries local FastAPI inference microservice (Port 8000: Preprocessing + Classical CV + EasyOCR)
- * 2. Cascades to Cloud Vision (GPT-4o / Gemini Flash) if local microservice is offline or errors
+ * Supports engine choice: 'cloud' (GPT-4o / Gemini Flash, default) or 'local' (FastAPI Classical CV + EasyOCR)
+ * Automatically cross-cascades if the preferred engine fails.
  */
 async function processRasterImage(imgBase64, options = {}) {
-  // 1. Try local inference microservice
-  try {
-    const infResult = await proxyToInferenceAPI(imgBase64, options);
-    if (infResult && infResult.diagram) {
-      return {
-        diagram: infResult.diagram,
-        preprocessing: infResult.preprocessing,
-        modelUsed: infResult.modelUsed || 'local-cv-pipeline',
-      };
-    }
-  } catch (proxyErr) {
-    console.warn('[Import Route] Local inference microservice unavailable or failed, attempting Cloud Vision fallback:', proxyErr.message);
-  }
+  const preferredEngine = options.engine || 'cloud';
 
-  // 2. Cloud Vision Fallback (GPT-4o -> Gemini Flash)
-  try {
-    const visionResult = await analyzeDiagramVision(imgBase64, {
-      sessionId: options.sessionId,
-      instruction: 'Extract all diagram nodes, labels, and connecting arrows accurately into the standard diagram schema.',
-    });
-    if (visionResult?.parsed?.nodes) {
-      return {
-        diagram: visionResult.parsed,
-        preprocessing: { fallback: true },
-        modelUsed: visionResult.modelUsed || 'cloud-vision-fallback',
-      };
+  if (preferredEngine === 'cloud') {
+    // 1. Try Cloud Vision (Gemini Flash / GPT-4o) - understands UML, architecture, and complex text
+    try {
+      const visionResult = await analyzeDiagramVision(imgBase64, {
+        sessionId: options.sessionId,
+        instruction: 'Extract all diagram nodes, classes, labels, and connecting arrows accurately into standard diagram schema.',
+      });
+      if (visionResult?.parsed?.nodes && visionResult.parsed.nodes.length > 0) {
+        return {
+          diagram: visionResult.parsed,
+          preprocessing: { engine: 'cloud-vision' },
+          modelUsed: visionResult.modelUsed || 'cloud-vision',
+        };
+      }
+    } catch (visionErr) {
+      console.warn('[Import Route] Cloud vision failed, cascading to local CV pipeline:', visionErr.message);
     }
-  } catch (visionErr) {
-    console.error('[Import Route] Cloud vision fallback also failed:', visionErr.message);
+
+    // 2. Fallback to Local CV microservice
+    try {
+      const infResult = await proxyToInferenceAPI(imgBase64, options);
+      if (infResult && infResult.diagram) {
+        return {
+          diagram: infResult.diagram,
+          preprocessing: infResult.preprocessing,
+          modelUsed: infResult.modelUsed || 'local-cv-pipeline',
+        };
+      }
+    } catch (proxyErr) {
+      console.error('[Import Route] Local CV pipeline also failed:', proxyErr.message);
+    }
+  } else {
+    // 1. Try Local CV microservice (Fast offline line-art)
+    try {
+      const infResult = await proxyToInferenceAPI(imgBase64, options);
+      if (infResult && infResult.diagram) {
+        return {
+          diagram: infResult.diagram,
+          preprocessing: infResult.preprocessing,
+          modelUsed: infResult.modelUsed || 'local-cv-pipeline',
+        };
+      }
+    } catch (proxyErr) {
+      console.warn('[Import Route] Local CV microservice failed, cascading to Cloud Vision:', proxyErr.message);
+    }
+
+    // 2. Fallback to Cloud Vision
+    try {
+      const visionResult = await analyzeDiagramVision(imgBase64, {
+        sessionId: options.sessionId,
+        instruction: 'Extract all diagram nodes, classes, labels, and connecting arrows accurately into standard diagram schema.',
+      });
+      if (visionResult?.parsed?.nodes && visionResult.parsed.nodes.length > 0) {
+        return {
+          diagram: visionResult.parsed,
+          preprocessing: { engine: 'cloud-vision-fallback' },
+          modelUsed: visionResult.modelUsed || 'cloud-vision-fallback',
+        };
+      }
+    } catch (visionErr) {
+      console.error('[Import Route] Cloud vision fallback also failed:', visionErr.message);
+    }
   }
 
   throw new Error(
@@ -86,7 +121,7 @@ async function processRasterImage(imgBase64, options = {}) {
  */
 importRouter.post('/file', requireAuth, aiRateLimiter, async (req, res) => {
   try {
-    const { filename, content, enablePreprocessing, enableHighPrecision, sessionId } = req.body;
+    const { filename, content, enablePreprocessing, enableHighPrecision, sessionId, engine = 'cloud' } = req.body;
 
     if (!content) {
       return res.status(400).json({ error: 'content is required' });
@@ -126,7 +161,7 @@ importRouter.post('/file', requireAuth, aiRateLimiter, async (req, res) => {
         // Fallback to raster vision pipeline (local CV + cloud vision fallback)
         const b64 = Buffer.from(detected.text).toString('base64');
         const imgData = `data:image/svg+xml;base64,${b64}`;
-        const infResult = await processRasterImage(imgData, { enablePreprocessing, enableHighPrecision, sessionId });
+        const infResult = await processRasterImage(imgData, { enablePreprocessing, enableHighPrecision, sessionId, engine });
         const normalized = normalizeDiagram(infResult.diagram, 'image');
         return res.json({
           status: 'success',
@@ -151,7 +186,7 @@ importRouter.post('/file', requireAuth, aiRateLimiter, async (req, res) => {
     // 4. Raster Image (PNG, JPG, WEBP) -> Local FastAPI with Cloud Vision Fallback
     if (detected.format === 'raster_image') {
       const imgBase64 = content.startsWith('data:') ? content : `data:${detected.mimeType};base64,${content}`;
-      const infResult = await processRasterImage(imgBase64, { enablePreprocessing, enableHighPrecision, sessionId });
+      const infResult = await processRasterImage(imgBase64, { enablePreprocessing, enableHighPrecision, sessionId, engine });
       const normalized = normalizeDiagram(infResult.diagram, 'image');
       return res.json({
         status: 'success',

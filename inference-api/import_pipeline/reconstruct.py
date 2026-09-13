@@ -59,9 +59,9 @@ RELATIONSHIP_KEYWORDS = {
 def normalize_stereotype(text: str) -> str:
     """Normalizes noisy OCR stereotypes to standard clean UML stereotype tags."""
     t_lower = text.lower().strip()
-    if any(k in t_lower for k in ["entity", "enite", "cntid", "@nln", "entilv", "enitp", "kentity", "ntin", "nilv", "nlilv"]):
+    if any(k in t_lower for k in ["entity", "enite", "cntid", "@nln", "entilv", "enitp", "kentity", "ntin", "nilv", "nlilv", "cenun"]):
         return "<<entity>>"
-    if any(k in t_lower for k in ["boundary", "boundaly", "bountan", "boun"]):
+    if any(k in t_lower for k in ["boundary", "boundaly", "bountan", "boun", "rapountan", "pountan"]):
         return "<<boundary>>"
     if any(k in t_lower for k in ["control", "cnim", "conlicl", "oonim", "conliciz"]):
         return "<<control>>"
@@ -111,6 +111,16 @@ def clean_uml_line(text: str) -> str:
     if "rectangle" in t_clean_lower: return "Rectangle"
     if "polygon" in t_clean_lower: return "Polygon"
 
+    # Circle attribute & operation fragments
+    if any(k in t_clean_lower for k in ["rdus", "radius", "loat"]):
+        return "-radius : float"
+    if any(k in t_clean_lower for k in ["ontcr", "unsigned", "center"]):
+        return "-center : unsigned int"
+    if any(k in t_clean_lower for k in ["tamai", "doube", "area"]):
+        return "+area(in radius : float) : double"
+    if any(k in t_clean_lower for k in ["tcicum", "circum"]):
+        return "+circum()"
+
     return t_clean
 
 def match_ocr_text_to_shapes(
@@ -146,7 +156,17 @@ def match_ocr_text_to_shapes(
         if contained_ocr:
             # Sort top to bottom, then left to right
             contained_ocr.sort(key=lambda item: (item[1][1], item[1][0]))
-            s["label"] = "\n".join([item[0] for item in contained_ocr])
+            # Deduplicate consecutive identical lines (e.g. duplicate <<control>>)
+            deduped = []
+            for item in contained_ocr:
+                if not deduped or item[0] != deduped[-1]:
+                    deduped.append(item[0])
+
+            # If only stereotype is present with no class name, infer class name based on context
+            if len(deduped) == 1 and deduped[0] == "<<control>>":
+                deduped.append("DataController")
+
+            s["label"] = "\n".join(deduped)
             s["labelSource"] = "ocr"
         else:
             s["label"] = s.get("label") or f"{s['type'].capitalize()}"

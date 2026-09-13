@@ -47,7 +47,7 @@ async function processRasterImage(imgBase64, options = {}) {
   const preferredEngine = options.engine || 'cloud';
 
   if (preferredEngine === 'cloud') {
-    // 1. Try Cloud Vision (GPT-4o / Gemini Flash) - understands UML, architecture, and complex text
+    let cloudVisionError = null;
     try {
       const visionResult = await analyzeDiagramVision(imgBase64, {
         sessionId: options.sessionId,
@@ -63,7 +63,8 @@ async function processRasterImage(imgBase64, options = {}) {
         };
       }
     } catch (visionErr) {
-      console.warn('[Import Route] Cloud vision failed, cascading to local CV pipeline:', visionErr.message);
+      cloudVisionError = visionErr.message || String(visionErr);
+      console.warn('[Import Route] Cloud vision failed, cascading to local CV pipeline:', cloudVisionError);
     }
 
     // 2. Fallback to Local CV microservice
@@ -73,7 +74,8 @@ async function processRasterImage(imgBase64, options = {}) {
         return {
           diagram: infResult.diagram,
           preprocessing: infResult.preprocessing,
-          modelUsed: infResult.modelUsed || 'local-cv-pipeline',
+          modelUsed: 'local-cv-fallback',
+          fallbackReason: cloudVisionError ? `Cloud Vision unavailable (${cloudVisionError}). Processed with Classical CV offline pipeline.` : undefined,
         };
       }
     } catch (proxyErr) {

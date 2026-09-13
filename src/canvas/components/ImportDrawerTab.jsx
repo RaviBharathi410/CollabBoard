@@ -337,6 +337,25 @@ export default function ImportDrawerTab({
                 )}
               </div>
             )}
+            {importMeta?.fallbackReason && (
+              <div
+                style={{
+                  marginTop: '10px',
+                  padding: '8px 10px',
+                  borderRadius: '6px',
+                  background: '#FEF3C7',
+                  border: '1px solid #F59E0B',
+                  fontSize: '11px',
+                  color: '#92400E',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '6px',
+                }}
+              >
+                <AlertTriangle size={14} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span>{importMeta.fallbackReason}</span>
+              </div>
+            )}
           </div>
 
           {/* Diagram Summary */}

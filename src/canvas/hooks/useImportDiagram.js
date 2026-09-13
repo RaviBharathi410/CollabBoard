@@ -74,6 +74,7 @@ export default function useImportDiagram(stageRef) {
           isStructured: data.isStructured,
           preprocessing: data.preprocessing,
           modelUsed: data.modelUsed,
+          fallbackReason: data.fallbackReason,
         });
       } catch (err) {
         console.error('[useImportDiagram] Error importing file:', err);
@@ -220,14 +221,31 @@ export default function useImportDiagram(stageRef) {
     let offsetY = 0;
 
     if (hasPositions) {
-      // Pre-compute dynamic content sizes so boxes don't truncate multiline text
+      // Pre-compute dynamic content sizes and prevent horizontal collisions
       const nodesWithDimensions = previewDiagram.nodes.map((n) => {
         const cleanLabel = formatNodeLabel(n);
         const { w: minW, h: minH } = computeDynamicDimensions(cleanLabel, 150, 60);
         const actualW = Math.max(n.width || 120, minW);
         const actualH = Math.max(n.height || 60, minH);
-        return { ...n, formattedLabel: cleanLabel, w: actualW, h: actualH };
+        return { ...n, x: n.x, y: n.y, formattedLabel: cleanLabel, w: actualW, h: actualH };
       });
+
+      // Separation pass: ensure expanded boxes do not overlap neighbors
+      for (let i = 0; i < nodesWithDimensions.length; i++) {
+        for (let j = 0; j < nodesWithDimensions.length; j++) {
+          if (i === j) continue;
+          const n1 = nodesWithDimensions[i];
+          const n2 = nodesWithDimensions[j];
+          const margin = 18;
+          const xOverlap = n1.x < n2.x + n2.w + margin && n1.x + n1.w + margin > n2.x;
+          const yOverlap = n1.y < n2.y + n2.h + margin && n1.y + n1.h + margin > n2.y;
+          if (xOverlap && yOverlap) {
+            if (n2.x >= n1.x) {
+              n2.x = n1.x + n1.w + margin;
+            }
+          }
+        }
+      }
 
       const minX = Math.min(...nodesWithDimensions.map((n) => n.x));
       const maxX = Math.max(...nodesWithDimensions.map((n) => n.x + n.w));
@@ -248,7 +266,37 @@ export default function useImportDiagram(stageRef) {
         absY: n.y + offsetY,
       }));
 
-      // Edges with waypoints or connecting centers
+      // Smart closest-anchor routing: connects top/bottom/left/right anchors naturally
+      const getBestConnectionPoints = (sNode, tNode) => {
+        const sAnchors = [
+          { x: sNode.absX + sNode.w / 2, y: sNode.absY }, // top
+          { x: sNode.absX + sNode.w / 2, y: sNode.absY + sNode.h }, // bottom
+          { x: sNode.absX, y: sNode.absY + sNode.h / 2 }, // left
+          { x: sNode.absX + sNode.w, y: sNode.absY + sNode.h / 2 }, // right
+        ];
+        const tAnchors = [
+          { x: tNode.absX + tNode.w / 2, y: tNode.absY }, // top
+          { x: tNode.absX + tNode.w / 2, y: tNode.absY + tNode.h }, // bottom
+          { x: tNode.absX, y: tNode.absY + tNode.h / 2 }, // left
+          { x: tNode.absX + tNode.w, y: tNode.absY + tNode.h / 2 }, // right
+        ];
+
+        let bestPair = [sAnchors[3], tAnchors[2]];
+        let minDist = Infinity;
+
+        for (const sa of sAnchors) {
+          for (const ta of tAnchors) {
+            const dist = Math.hypot(sa.x - ta.x, sa.y - ta.y);
+            if (dist < minDist) {
+              minDist = dist;
+              bestPair = [sa, ta];
+            }
+          }
+        }
+        return [bestPair[0].x, bestPair[0].y, bestPair[1].x, bestPair[1].y];
+      };
+
+      // Edges with waypoints or smart closest-anchor endpoints
       laidEdges = (previewDiagram.edges || []).map((e) => {
         let points = [];
         if (e.points && e.points.length > 0) {
@@ -257,12 +305,7 @@ export default function useImportDiagram(stageRef) {
           const sNode = laidNodes.find((n) => n.id === e.source);
           const tNode = laidNodes.find((n) => n.id === e.target);
           if (sNode && tNode) {
-            points = [
-              sNode.absX + sNode.w,
-              sNode.absY + sNode.h / 2,
-              tNode.absX,
-              tNode.absY + tNode.h / 2,
-            ];
+            points = getBestConnectionPoints(sNode, tNode);
           }
         }
         return { ...e, points };

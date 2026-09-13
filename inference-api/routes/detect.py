@@ -68,11 +68,18 @@ async def detect(payload: DetectRequest):
                 model_used = "geometric_cv_fallback"
                 for d in cv_dets:
                     b = d["box"]
+                    c_name = d.get("class_name") or d.get("type", "rectangle")
+                    norm = d.get("bbox_normalized") or [
+                        float(b[0] / orig_w),
+                        float(b[1] / orig_h),
+                        float((b[2] - b[0]) / orig_w),
+                        float((b[3] - b[1]) / orig_h),
+                    ]
                     detections.append({
-                        "class_name": d["type"],
+                        "class_name": c_name,
                         "confidence": float(d.get("confidence", 0.85)),
                         "bbox": [float(c) for c in b],
-                        "bbox_normalized": [float(b[0] / orig_w), float(b[1] / orig_h), float(b[2] / orig_w), float(b[3] / orig_h)]
+                        "bbox_normalized": norm,
                     })
             except Exception as cv_err:
                 print(f"[Detect] Classical CV fallback error: {cv_err}")

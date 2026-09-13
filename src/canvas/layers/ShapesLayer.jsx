@@ -180,12 +180,12 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
             <Text
               key={shape.id}
               {...commonProps(shape)}
-              text={shape.text}
+              text={(shape.text || '').replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n')}
               fontSize={shape.fontSize || 14}
               fontFamily="IBM Plex Sans"
               fill={shape.fill || '#26241F'}
               width={shape.width}
-              lineHeight={1.3}
+              lineHeight={shape.lineHeight || 1.3}
             />
           );
         }

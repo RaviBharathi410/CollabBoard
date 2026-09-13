@@ -217,6 +217,8 @@ describe('canvasStore', () => {
 
     it('delegates to undoManager when configured', () => {
       const mockUndoManager = {
+        canUndo: vi.fn(() => true),
+        canRedo: vi.fn(() => true),
         undo: vi.fn(),
         redo: vi.fn(),
       };
@@ -229,6 +231,98 @@ describe('canvasStore', () => {
 
       redo();
       expect(mockUndoManager.redo).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to local undo stack if undoManager cannot undo', () => {
+      const mockUndoManager = {
+        canUndo: vi.fn(() => false),
+        canRedo: vi.fn(() => false),
+        undo: vi.fn(),
+        redo: vi.fn(),
+      };
+
+      const { setUndoManager, addShape, undo } = useCanvasStore.getState();
+      addShape({ type: 'rectangle', label: 'Item 1' });
+      setUndoManager(mockUndoManager);
+
+      undo();
+      // Should have fallen back to local undo stack and removed the shape
+      expect(useCanvasStore.getState().shapes).toHaveLength(0);
+      expect(mockUndoManager.undo).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Select All & Clipboard Operations', () => {
+    it('selectAll selects all shapes on the canvas', () => {
+      const { addShape, selectAll } = useCanvasStore.getState();
+      const id1 = addShape({ type: 'rectangle', label: '1' });
+      const id2 = addShape({ type: 'circle', label: '2' });
+
+      selectAll();
+      expect(useCanvasStore.getState().selectedIds).toEqual([id1, id2]);
+    });
+
+    it('copy and paste duplicates selected shapes with offset and new IDs', () => {
+      const { addShape, setSelectedIds, copy, paste } = useCanvasStore.getState();
+      const id1 = addShape({ type: 'rectangle', x: 100, y: 100, width: 80, height: 60, label: 'Box' });
+
+      setSelectedIds([id1]);
+      copy();
+      expect(useCanvasStore.getState().clipboard).toHaveLength(1);
+
+      const pastedIds = paste({ x: 30, y: 30 });
+      expect(pastedIds).toHaveLength(1);
+      expect(pastedIds[0]).not.toBe(id1);
+
+      const allShapes = useCanvasStore.getState().shapes;
+      expect(allShapes).toHaveLength(2);
+      expect(allShapes[1].x).toBe(130);
+      expect(allShapes[1].y).toBe(130);
+      expect(useCanvasStore.getState().selectedIds).toEqual(pastedIds);
+    });
+
+    it('cut copies shapes to clipboard and removes them from canvas', () => {
+      const { addShape, setSelectedIds, cut } = useCanvasStore.getState();
+      const id1 = addShape({ type: 'rectangle', label: 'To Cut' });
+
+      setSelectedIds([id1]);
+      cut();
+
+      expect(useCanvasStore.getState().shapes).toHaveLength(0);
+      expect(useCanvasStore.getState().clipboard).toHaveLength(1);
+      expect(useCanvasStore.getState().clipboard[0].label).toBe('To Cut');
+    });
+
+    it('duplicate performs copy and paste in one step', () => {
+      const { addShape, setSelectedIds, duplicate } = useCanvasStore.getState();
+      const id1 = addShape({ type: 'circle', x: 50, y: 50, radiusX: 20, radiusY: 20 });
+
+      setSelectedIds([id1]);
+      const dupIds = duplicate({ x: 20, y: 20 });
+
+      expect(dupIds).toHaveLength(1);
+      expect(useCanvasStore.getState().shapes).toHaveLength(2);
+      expect(useCanvasStore.getState().shapes[1].x).toBe(70);
+    });
+
+    it('addShapes adds multiple shapes in a single atomic history entry', () => {
+      const { addShapes, undo, redo } = useCanvasStore.getState();
+      const ids = addShapes([
+        { type: 'rectangle', label: 'A' },
+        { type: 'rectangle', label: 'B' },
+        { type: 'arrow', points: [0, 0, 100, 100] },
+      ]);
+
+      expect(ids).toHaveLength(3);
+      expect(useCanvasStore.getState().shapes).toHaveLength(3);
+
+      // Single undo should undo all 3 shapes atomically
+      undo();
+      expect(useCanvasStore.getState().shapes).toHaveLength(0);
+
+      // Redo restores all 3 shapes
+      redo();
+      expect(useCanvasStore.getState().shapes).toHaveLength(3);
     });
   });
 });

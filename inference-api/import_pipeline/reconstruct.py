@@ -50,47 +50,76 @@ def distance_point_to_box(px: float, py: float, bx1: float, by1: float, bx2: flo
     dy = max(by1 - py, 0.0, py - by2)
     return math.sqrt(dx * dx + dy * dy)
 
+RELATIONSHIP_KEYWORDS = {
+    "dependency", "association", "aggregation", "composition", "generalization",
+    "realization", "inheritance", "abstract class", "control class", "boundary class",
+    "entity class", "operation", "attribute", "class"
+}
+
+def normalize_stereotype(text: str) -> str:
+    """Normalizes noisy OCR stereotypes to standard clean UML stereotype tags."""
+    t_lower = text.lower().strip()
+    if any(k in t_lower for k in ["entity", "enite", "cntid", "@nln", "entilv"]):
+        return "<<entity>>"
+    if any(k in t_lower for k in ["boundary", "boundaly", "bountan"]):
+        return "<<boundary>>"
+    if any(k in t_lower for k in ["control", "cnim", "conlicl"]):
+        return "<<control>>"
+    return text
+
 def match_ocr_text_to_shapes(
     shapes: List[Dict[str, Any]],
     ocr_regions: List[Dict[str, Any]],
     orig_w: int,
     orig_h: int
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
-    Matches independent OCR text boxes to detected shapes using spatial overlap.
-    Unmatched OCR text boxes with significant text become standalone text nodes.
+    Matches OCR text boxes to detected shapes using spatial overlap.
+    Sorts matched lines top-to-bottom and joins with newlines for clean UML compartments.
+    Returns (shapes_with_text, relationship_annotations).
     """
     used_ocr_indices = set()
 
     for s in shapes:
         s_box = s["box"]  # [x1, y1, x2, y2]
-        matched_texts = []
+        contained_ocr = []
 
         for idx, ocr in enumerate(ocr_regions):
             o_box = ocr.get("bbox", [0, 0, 0, 0])
-            # Check if text is inside shape or has high containment
-            containment = box_containment(o_box, s_box)
+            containment = box_containment(o_box, s_box, margin=8.0)
             iou = box_iou(s_box, o_box)
 
-            if containment > 0.4 or iou > 0.1:
-                text_val = ocr.get("text", "").strip()
-                if text_val:
-                    matched_texts.append(text_val)
+            if containment > 0.40 or iou > 0.10:
+                raw_t = ocr.get("text", "").strip()
+                if raw_t:
+                    clean_t = normalize_stereotype(raw_t)
+                    contained_ocr.append((clean_t, o_box, ocr.get("confidence", 0.9)))
                     used_ocr_indices.add(idx)
 
-        if matched_texts:
-            s["label"] = " ".join(matched_texts)
+        if contained_ocr:
+            # Sort top to bottom, then left to right
+            contained_ocr.sort(key=lambda item: (item[1][1], item[1][0]))
+            s["label"] = "\n".join([item[0] for item in contained_ocr])
             s["labelSource"] = "ocr"
         else:
-            # Fallback label to shape type if OCR text not found
             s["label"] = s.get("label") or f"{s['type'].capitalize()}"
             s["labelSource"] = "default"
 
-    # Any remaining unused OCR regions with text become standalone text nodes
+    # Separate remaining unused OCR regions: relationship annotations vs standalone notes
+    relationship_annotations = []
     for idx, ocr in enumerate(ocr_regions):
         if idx not in used_ocr_indices:
             text_val = ocr.get("text", "").strip()
-            if text_val:
+            if not text_val:
+                continue
+            text_lower = text_val.lower()
+            if any(kw in text_lower for kw in RELATIONSHIP_KEYWORDS):
+                relationship_annotations.append({
+                    "text": text_val,
+                    "bbox": ocr.get("bbox", [0, 0, 0, 0])
+                })
+            else:
+                # Standalone note or annotation box (not a relationship keyword)
                 b = ocr.get("bbox", [0, 0, 100, 40])
                 shapes.append({
                     "id": f"text-{len(shapes) + 1}",
@@ -108,7 +137,7 @@ def match_ocr_text_to_shapes(
                     "labelSource": "ocr"
                 })
 
-    return shapes
+    return shapes, relationship_annotations
 
 def reconstruct_diagram_graph(
     detections: List[Dict[str, Any]],
@@ -154,7 +183,9 @@ def reconstruct_diagram_graph(
                 sc["source"] = "inferred"
 
     # 2. Match OCR text to shapes
-    nodes_with_text = match_ocr_text_to_shapes(shape_candidates, ocr_regions, orig_w, orig_h)
+    nodes_with_text, relationship_annotations = match_ocr_text_to_shapes(
+        shape_candidates, ocr_regions, orig_w, orig_h
+    )
 
     # 3. Match arrows to source and target shape endpoints
     edges = []
@@ -175,7 +206,7 @@ def reconstruct_diagram_graph(
         for node in nodes_with_text:
             nx1, ny1, nx2, ny2 = node["box"]
             d = distance_point_to_box(start_pt[0], start_pt[1], nx1, ny1, nx2, ny2)
-            if d < min_src_dist and d < 180.0:
+            if d < min_src_dist and d < 140.0:
                 min_src_dist = d
                 source_id = node["id"]
 
@@ -184,17 +215,28 @@ def reconstruct_diagram_graph(
         for node in nodes_with_text:
             nx1, ny1, nx2, ny2 = node["box"]
             d = distance_point_to_box(end_pt[0], end_pt[1], nx1, ny1, nx2, ny2)
-            if d < min_tgt_dist and d < 180.0:
+            if d < min_tgt_dist and d < 140.0:
                 min_tgt_dist = d
                 target_id = node["id"]
 
         if source_id and target_id and source_id != target_id:
             if not any(e["source"] == source_id and e["target"] == target_id for e in edges):
+                # Search for relationship annotation near line midpoint
+                mid_x = (start_pt[0] + end_pt[0]) / 2.0
+                mid_y = (start_pt[1] + end_pt[1]) / 2.0
+                edge_label = ""
+                for ann in relationship_annotations:
+                    ab = ann["bbox"]
+                    dist = distance_point_to_box(mid_x, mid_y, ab[0], ab[1], ab[2], ab[3])
+                    if dist < 65.0:
+                        edge_label = ann["text"]
+                        break
+
                 edges.append({
                     "id": f"e{len(edges) + 1}",
                     "source": source_id,
                     "target": target_id,
-                    "label": "",
+                    "label": edge_label,
                     "style": "solid",
                     "sourceTag": "detected",
                     "confidence": float(round(arrow.get("confidence", 0.75), 3))

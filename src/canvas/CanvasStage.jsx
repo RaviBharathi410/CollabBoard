@@ -62,21 +62,60 @@ export default function CanvasStage({ isOutlineOpen: externalOutlineOpen, onClos
   // Keyboard shortcut listener
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      // Don't intercept shortcuts when typing in an input field or contenteditable element
+      if (
+        e.target?.tagName === 'INPUT' ||
+        e.target?.tagName === 'TEXTAREA' ||
+        e.target?.isContentEditable ||
+        ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName) ||
+        document.activeElement?.isContentEditable
+      ) {
+        return;
+      }
 
-      const setTool = useCanvasStore.getState().setActiveTool;
-      const { undo, redo, deleteShapes, selectedIds } = useCanvasStore.getState();
+      const store = useCanvasStore.getState();
+      const setTool = store.setActiveTool;
+      const {
+        undo,
+        redo,
+        deleteShapes,
+        selectedIds,
+        selectAll,
+        copy,
+        cut,
+        paste,
+        duplicate,
+      } = store;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedIds.length > 0) deleteShapes(selectedIds);
+        if (selectedIds.length > 0) {
+          e.preventDefault();
+          deleteShapes(selectedIds);
+        }
       } else if (e.ctrlKey || e.metaKey) {
-        if (e.key.toLowerCase() === 'z') {
+        const key = e.key.toLowerCase();
+        if (key === 'z') {
           e.preventDefault();
           if (e.shiftKey) redo();
           else undo();
-        } else if (e.key.toLowerCase() === 'y') {
+        } else if (key === 'y') {
           e.preventDefault();
           redo();
+        } else if (key === 'a') {
+          e.preventDefault();
+          selectAll();
+        } else if (key === 'c') {
+          e.preventDefault();
+          copy();
+        } else if (key === 'x') {
+          e.preventDefault();
+          cut();
+        } else if (key === 'v') {
+          e.preventDefault();
+          paste();
+        } else if (key === 'd') {
+          e.preventDefault();
+          duplicate();
         }
       } else {
         const key = e.key.toLowerCase();

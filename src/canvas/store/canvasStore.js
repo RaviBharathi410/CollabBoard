@@ -11,6 +11,7 @@ export const useCanvasStore = create((set, get) => ({
   // ── Shapes State ──
   shapes: [],
   selectedIds: [],
+  clipboard: [],
   activeTool: 'select', // select | hand | marquee | rectangle | circle | diamond | arrow | pencil | text
 
   // ── Undo / Redo Stacks ──
@@ -24,6 +25,72 @@ export const useCanvasStore = create((set, get) => ({
   // ── Selection ──
   setSelectedIds: (ids) => set({ selectedIds: ids }),
   clearSelection: () => set({ selectedIds: [] }),
+  selectAll: () => {
+    const { shapes } = get();
+    set({ selectedIds: shapes.map((s) => s.id) });
+  },
+
+  // ── Clipboard (Copy / Cut / Paste / Duplicate) ──
+  copy: () => {
+    const { shapes, selectedIds } = get();
+    if (selectedIds.length === 0) return;
+    const selectedShapes = shapes.filter((s) => selectedIds.includes(s.id));
+    if (selectedShapes.length === 0) return;
+    // Deep clone to isolate clipboard from future canvas mutations
+    const cloned = JSON.parse(JSON.stringify(selectedShapes));
+    set({ clipboard: cloned });
+  },
+
+  cut: () => {
+    const { copy, deleteShapes, selectedIds } = get();
+    if (selectedIds.length === 0) return;
+    copy();
+    deleteShapes(selectedIds);
+  },
+
+  paste: (offset = { x: 24, y: 24 }) => {
+    const { clipboard, shapes, _pushHistory } = get();
+    if (!clipboard || clipboard.length === 0) return [];
+
+    const newShapes = clipboard.map((shape) => {
+      const newId = uuidv4();
+      const cloned = { ...shape, id: newId };
+      if (typeof cloned.x === 'number') cloned.x += offset.x;
+      if (typeof cloned.y === 'number') cloned.y += offset.y;
+      if (Array.isArray(cloned.points)) {
+        cloned.points = cloned.points.map((pt, idx) =>
+          idx % 2 === 0 ? pt + offset.x : pt + offset.y
+        );
+      }
+      return cloned;
+    });
+
+    const history = _pushHistory(shapes);
+    const newSelectedIds = newShapes.map((s) => s.id);
+
+    set({
+      shapes: [...shapes, ...newShapes],
+      selectedIds: newSelectedIds,
+      // Shift clipboard offset for subsequent pastes so they cascade cleanly
+      clipboard: clipboard.map((s) => ({
+        ...s,
+        x: typeof s.x === 'number' ? s.x + offset.x : s.x,
+        y: typeof s.y === 'number' ? s.y + offset.y : s.y,
+        points: Array.isArray(s.points)
+          ? s.points.map((pt, idx) => (idx % 2 === 0 ? pt + offset.x : pt + offset.y))
+          : s.points,
+      })),
+      ...history,
+    });
+
+    return newSelectedIds;
+  },
+
+  duplicate: (offset = { x: 24, y: 24 }) => {
+    const { copy, paste } = get();
+    copy();
+    return paste(offset);
+  },
 
   // ── History Helper (internal) ──
   _pushHistory: (prevShapes) => {
@@ -46,6 +113,23 @@ export const useCanvasStore = create((set, get) => ({
       ...history,
     });
     return id;
+  },
+
+  // Atomic batch addition — pushes a single history entry for atomic undo
+  addShapes: (shapesDataArray) => {
+    if (!Array.isArray(shapesDataArray) || shapesDataArray.length === 0) return [];
+    const prev = get().shapes;
+    const history = get()._pushHistory(prev);
+    const newShapes = shapesDataArray.map((data) => ({
+      id: data.id || uuidv4(),
+      ...data,
+    }));
+    set({
+      shapes: [...prev, ...newShapes],
+      selectedIds: newShapes.map((s) => s.id),
+      ...history,
+    });
+    return newShapes.map((s) => s.id);
   },
 
   updateShape: (id, updates) => {
@@ -82,9 +166,13 @@ export const useCanvasStore = create((set, get) => ({
 
   undo: () => {
     const { undoManager, undoStack, redoStack, shapes } = get();
-    if (undoManager) {
-      undoManager.undo();
-      return;
+    if (undoManager && typeof undoManager.canUndo === 'function' && undoManager.canUndo()) {
+      try {
+        undoManager.undo();
+        return;
+      } catch (e) {
+        console.warn('[canvasStore] Yjs undo failed, falling back to local stack:', e);
+      }
     }
     if (undoStack.length === 0) return;
 
@@ -102,9 +190,13 @@ export const useCanvasStore = create((set, get) => ({
 
   redo: () => {
     const { undoManager, undoStack, redoStack, shapes } = get();
-    if (undoManager) {
-      undoManager.redo();
-      return;
+    if (undoManager && typeof undoManager.canRedo === 'function' && undoManager.canRedo()) {
+      try {
+        undoManager.redo();
+        return;
+      } catch (e) {
+        console.warn('[canvasStore] Yjs redo failed, falling back to local stack:', e);
+      }
     }
     if (redoStack.length === 0) return;
 

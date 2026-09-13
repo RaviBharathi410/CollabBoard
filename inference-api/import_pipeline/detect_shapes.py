@@ -85,6 +85,11 @@ def detect_shapes_cv(cv_img: np.ndarray) -> List[Dict[str, Any]]:
                 continue
 
             bx, by, bw, bh = cv2.boundingRect(cnt)
+
+            # Outer canvas frame filter: reject giant bounding boxes that frame the entire diagram
+            if (bw > 0.82 * w and bh > 0.82 * h) or area > (w * h) * 0.45:
+                continue
+
             aspect = bw / float(bh + 1e-5)
 
             # Avoid extreme line-like aspect ratios
@@ -124,6 +129,59 @@ def detect_shapes_cv(cv_img: np.ndarray) -> List[Dict[str, Any]]:
                         break
             if not is_enclosed_or_dup:
                 filtered_candidates.append(c)
+
+        # Multi-compartment table/class merger:
+        # Detects vertically stacked compartments sharing left X and width (e.g. UML class name + attributes + methods)
+        c_boxes = [dict(c) for c in filtered_candidates]
+        has_merged = True
+        while has_merged:
+            has_merged = False
+            next_boxes = []
+            used_indices = set()
+            for i in range(len(c_boxes)):
+                if i in used_indices:
+                    continue
+                b1 = c_boxes[i]["box"]
+                merged_any = False
+                for j in range(i + 1, len(c_boxes)):
+                    if j in used_indices:
+                        continue
+                    b2 = c_boxes[j]["box"]
+                    x_diff = abs(b1[0] - b2[0])
+                    w1 = b1[2]
+                    w2 = b2[2]
+                    w_diff = abs(w1 - w2)
+
+                    top_box = b1 if b1[1] <= b2[1] else b2
+                    bot_box = b2 if b1[1] <= b2[1] else b1
+                    v_gap = bot_box[1] - (top_box[1] + top_box[3])
+
+                    if x_diff <= 16 and w_diff <= 16 and -8 <= v_gap <= 14:
+                        mx1 = min(b1[0], b2[0])
+                        my1 = min(b1[1], b2[1])
+                        mx2 = max(b1[0] + b1[2], b2[0] + b2[2])
+                        my2 = max(b1[1] + b1[3], b2[1] + b2[3])
+                        mw = mx2 - mx1
+                        mh = my2 - my1
+                        new_item = {
+                            "box": (mx1, my1, mw, mh),
+                            "area": float(mw * mh),
+                            "circularity": 0.0,
+                            "approx": np.array([[mx1, my1], [mx2, my1], [mx2, my2], [mx1, my2]]),
+                            "aspect": mw / float(mh + 1e-5),
+                        }
+                        next_boxes.append(new_item)
+                        used_indices.add(i)
+                        used_indices.add(j)
+                        has_merged = True
+                        merged_any = True
+                        break
+                if not merged_any and i not in used_indices:
+                    next_boxes.append(c_boxes[i])
+                    used_indices.add(i)
+            c_boxes = next_boxes
+
+        filtered_candidates = c_boxes
 
         for c in filtered_candidates:
             bx, by, bw, bh = c["box"]

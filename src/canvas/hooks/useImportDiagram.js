@@ -187,6 +187,31 @@ export default function useImportDiagram(stageRef) {
     const viewCenterX = -stagePos.x / scale + stageW / scale / 2;
     const viewCenterY = -stagePos.y / scale + stageH / scale / 2;
 
+    const formatNodeLabel = (n) => {
+      let label = (n.label || '').replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n');
+      if (n.properties && (n.properties.attributes?.length || n.properties.operations?.length)) {
+        const parts = [label];
+        if (n.properties.attributes?.length) {
+          parts.push('────────────────');
+          parts.push(...n.properties.attributes);
+        }
+        if (n.properties.operations?.length) {
+          parts.push('────────────────');
+          parts.push(...n.properties.operations);
+        }
+        label = parts.join('\n');
+      }
+      return label;
+    };
+
+    const computeDynamicDimensions = (label, defaultW = 160, defaultH = 65) => {
+      const lines = (label || '').split('\n');
+      const maxLineLen = Math.max(...lines.map((l) => l.length), 8);
+      const w = Math.max(defaultW, Math.min(360, Math.round(maxLineLen * 8.2 + 32)));
+      const h = Math.max(defaultH, Math.round(lines.length * 19 + 26));
+      return { w, h, lines };
+    };
+
     const hasPositions = previewDiagram.nodes.every((n) => typeof n.x === 'number' && typeof n.y === 'number');
 
     let laidNodes = [];
@@ -195,11 +220,19 @@ export default function useImportDiagram(stageRef) {
     let offsetY = 0;
 
     if (hasPositions) {
-      // Use existing parsed / detected positions and center them in viewport
-      const minX = Math.min(...previewDiagram.nodes.map((n) => n.x));
-      const maxX = Math.max(...previewDiagram.nodes.map((n) => n.x + (n.width || 120)));
-      const minY = Math.min(...previewDiagram.nodes.map((n) => n.y));
-      const maxY = Math.max(...previewDiagram.nodes.map((n) => n.y + (n.height || 60)));
+      // Pre-compute dynamic content sizes so boxes don't truncate multiline text
+      const nodesWithDimensions = previewDiagram.nodes.map((n) => {
+        const cleanLabel = formatNodeLabel(n);
+        const { w: minW, h: minH } = computeDynamicDimensions(cleanLabel, 150, 60);
+        const actualW = Math.max(n.width || 120, minW);
+        const actualH = Math.max(n.height || 60, minH);
+        return { ...n, formattedLabel: cleanLabel, w: actualW, h: actualH };
+      });
+
+      const minX = Math.min(...nodesWithDimensions.map((n) => n.x));
+      const maxX = Math.max(...nodesWithDimensions.map((n) => n.x + n.w));
+      const minY = Math.min(...nodesWithDimensions.map((n) => n.y));
+      const maxY = Math.max(...nodesWithDimensions.map((n) => n.y + n.h));
 
       const diagW = maxX - minX;
       const diagH = maxY - minY;
@@ -209,12 +242,10 @@ export default function useImportDiagram(stageRef) {
       offsetX = viewCenterX - diagCenterX;
       offsetY = viewCenterY - diagCenterY;
 
-      laidNodes = previewDiagram.nodes.map((n) => ({
+      laidNodes = nodesWithDimensions.map((n) => ({
         ...n,
         absX: n.x + offsetX,
         absY: n.y + offsetY,
-        w: n.width || 120,
-        h: n.height || 60,
       }));
 
       // Edges with waypoints or connecting centers
@@ -237,7 +268,7 @@ export default function useImportDiagram(stageRef) {
         return { ...e, points };
       });
     } else {
-      // Need ELK Layout (e.g. Mermaid without explicit coordinates)
+      // Need ELK Layout (e.g. Mermaid or Cloud AI Vision without explicit coordinates)
       const elk = await getElk();
       const isLR = previewDiagram.layoutHint === 'hierarchical-lr';
 
@@ -246,16 +277,22 @@ export default function useImportDiagram(stageRef) {
         layoutOptions: {
           'elk.algorithm': 'layered',
           'elk.direction': isLR ? 'RIGHT' : 'DOWN',
-          'elk.spacing.nodeNode': '60',
-          'elk.layered.spacing.nodeNodeBetweenLayers': '80',
+          'elk.spacing.nodeNode': '80',
+          'elk.layered.spacing.nodeNodeBetweenLayers': '110',
+          'elk.layered.spacing.edgeNodeBetweenLayers': '50',
+          'elk.edgeRouting': 'ORTHOGONAL',
         },
-        children: previewDiagram.nodes.map((n) => ({
-          id: n.id,
-          width: 140,
-          height: 60,
-          labels: [{ text: n.label }],
-          data: n,
-        })),
+        children: previewDiagram.nodes.map((n) => {
+          const cleanLabel = formatNodeLabel(n);
+          const { w, h } = computeDynamicDimensions(cleanLabel, 160, 65);
+          return {
+            id: n.id,
+            width: w,
+            height: h,
+            labels: [{ text: cleanLabel }],
+            data: { ...n, formattedLabel: cleanLabel },
+          };
+        }),
         edges: (previewDiagram.edges || []).map((e, i) => ({
           id: e.id || `e${i}`,
           sources: [e.source],
@@ -275,8 +312,10 @@ export default function useImportDiagram(stageRef) {
 
       laidNodes = (laid.children || []).map((cn) => {
         const orig = previewDiagram.nodes.find((n) => n.id === cn.id);
+        const cleanLabel = cn.data?.formattedLabel || formatNodeLabel(orig);
         return {
           ...orig,
+          formattedLabel: cleanLabel,
           absX: cn.x + offsetX,
           absY: cn.y + offsetY,
           w: cn.width,
@@ -297,14 +336,17 @@ export default function useImportDiagram(stageRef) {
       });
     }
 
-    const addedIds = [];
-    const nodeIdToShapeId = new Map();
+    const shapesToCommit = [];
 
-    // 1. Commit Nodes to canvasStore
+    // 1. Prepare Nodes and formatted Text shapes
     for (const node of laidNodes) {
-      let shapeId;
-      if (node.type === 'circle') {
-        shapeId = store.addShape({
+      const cleanLabel = node.formattedLabel || formatNodeLabel(node);
+      const isCircle = node.type === 'circle';
+      const isDiamond = node.type === 'diamond';
+      const isDb = node.type === 'database';
+
+      if (isCircle) {
+        shapesToCommit.push({
           type: 'circle',
           x: node.absX + node.w / 2,
           y: node.absY + node.h / 2,
@@ -314,8 +356,8 @@ export default function useImportDiagram(stageRef) {
           stroke: '#6C63FF',
           strokeWidth: 2,
         });
-      } else if (node.type === 'diamond') {
-        shapeId = store.addShape({
+      } else if (isDiamond) {
+        shapesToCommit.push({
           type: 'diamond',
           x: node.absX,
           y: node.absY,
@@ -326,51 +368,57 @@ export default function useImportDiagram(stageRef) {
           strokeWidth: 2,
         });
       } else {
-        // Rectangle or database
-        shapeId = store.addShape({
+        shapesToCommit.push({
           type: 'rectangle',
           x: node.absX,
           y: node.absY,
           width: node.w,
           height: node.h,
-          fill: node.type === 'database' ? '#E6F4EA' : '#EEEDFE',
-          stroke: node.type === 'database' ? '#1E8E3E' : '#6C63FF',
+          fill: isDb ? '#E6F4EA' : '#EEEDFE',
+          stroke: isDb ? '#1E8E3E' : '#6C63FF',
           strokeWidth: 2,
         });
       }
 
-      addedIds.push(shapeId);
-      nodeIdToShapeId.set(node.id, shapeId);
+      // Format multiline label inside the box
+      if (cleanLabel) {
+        const lines = cleanLabel.split('\n');
+        const isMultiLine = lines.length > 1;
+        const textY = isMultiLine
+          ? node.absY + 12
+          : node.absY + Math.max(8, (node.h - 18) / 2);
 
-      // Label text shape
-      if (node.label) {
-        const textId = store.addShape({
+        shapesToCommit.push({
           type: 'text',
-          text: node.label,
-          x: node.absX + 8,
-          y: node.absY + node.h / 2 - 8,
-          width: Math.max(node.w - 16, 40),
-          fontSize: 13,
+          text: cleanLabel,
+          x: node.absX + 12,
+          y: textY,
+          width: Math.max(node.w - 24, 60),
+          fontSize: 12,
           fontFamily: 'Plus Jakarta Sans',
           fill: '#1A1A2E',
+          lineHeight: 1.35,
         });
-        addedIds.push(textId);
       }
     }
 
-    // 2. Commit Edges (arrows)
+    // 2. Prepare Edges (arrows)
     for (const edge of laidEdges) {
       if (edge.points && edge.points.length >= 4) {
-        const arrowId = store.addShape({
+        shapesToCommit.push({
           type: 'arrow',
           points: edge.points,
           stroke: '#6C63FF',
           strokeWidth: 1.5,
           dash: edge.style === 'dashed' ? [6, 3] : undefined,
         });
-        addedIds.push(arrowId);
       }
     }
+
+    // 3. Atomic commit: single history entry in canvasStore allows single-keystroke undo (Ctrl+Z)
+    const addedIds = typeof store.addShapes === 'function'
+      ? store.addShapes(shapesToCommit)
+      : shapesToCommit.map((s) => store.addShape(s));
 
     // Clear preview state & select all imported shapes
     setPreviewDiagram(null);

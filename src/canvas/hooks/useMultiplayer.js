@@ -117,6 +117,7 @@ export default function useMultiplayer(documentName) {
         if (g !== mountGen.current) return;
         unsubscribeZustand();
         newUndoManager.destroy();
+        useCanvasStore.getState().setUndoManager(null);
         try {
           newProvider.destroy();
         } catch {

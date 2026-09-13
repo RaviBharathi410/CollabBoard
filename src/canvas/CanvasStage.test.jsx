@@ -233,4 +233,54 @@ describe('CanvasStage Component Interactions & Shortcuts', () => {
 
     expect(useCanvasStore.getState().selectedIds).toHaveLength(0);
   });
+
+  it('handles Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X, and Ctrl+D shortcuts', async () => {
+    const s1 = { id: 's1', type: 'rectangle', x: 10, y: 10, width: 50, height: 50 };
+    const s2 = { id: 's2', type: 'circle', x: 100, y: 100, radiusX: 20, radiusY: 20 };
+
+    act(() => {
+      useCanvasStore.setState({ shapes: [s1, s2], selectedIds: [] });
+    });
+
+    await act(async () => {
+      root.render(<CanvasStage />);
+    });
+
+    // 1. Ctrl+A (Select All)
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true }));
+    });
+    expect(useCanvasStore.getState().selectedIds).toEqual(['s1', 's2']);
+
+    // 2. Ctrl+C (Copy)
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }));
+    });
+    expect(useCanvasStore.getState().clipboard).toHaveLength(2);
+
+    // 3. Ctrl+V (Paste)
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true }));
+    });
+    expect(useCanvasStore.getState().shapes).toHaveLength(4);
+
+    // 4. Ctrl+D (Duplicate) on single selected shape
+    act(() => {
+      useCanvasStore.setState({ selectedIds: ['s1'] });
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', ctrlKey: true }));
+    });
+    expect(useCanvasStore.getState().shapes).toHaveLength(5);
+
+    // 5. Ctrl+X (Cut)
+    act(() => {
+      useCanvasStore.setState({ selectedIds: ['s1'] });
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', ctrlKey: true }));
+    });
+    expect(useCanvasStore.getState().shapes.find((s) => s.id === 's1')).toBeUndefined();
+    expect(useCanvasStore.getState().clipboard[0].id).toBe('s1');
+  });
 });

@@ -135,31 +135,42 @@ def detect_text_regions_morphology(cv_img: np.ndarray) -> List[List[float]]:
     return merged_boxes
 
 def extract_text_paddle(pil_img: Image.Image) -> List[Dict[str, Any]]:
-    ocr_engine = get_paddle_ocr()
-    if ocr_engine is None:
+    try:
+        ocr_engine = get_paddle_ocr()
+        if ocr_engine is None:
+            return []
+
+        np_img = np.array(pil_img.convert("RGB"))
+        try:
+            results = ocr_engine.ocr(np_img, cls=True)
+        except (TypeError, Exception):
+            try:
+                results = ocr_engine.ocr(np_img)
+            except Exception as e:
+                print(f"[OCR] PaddleOCR run error: {e}")
+                return []
+
+        extracted = []
+        if results and len(results) > 0 and results[0] is not None:
+            for line in results[0]:
+                box_points = line[0]  # 4 points [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
+                text, conf = line[1]
+
+                xs = [p[0] for p in box_points]
+                ys = [p[1] for p in box_points]
+                bbox = [float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))]
+
+                extracted.append({
+                    "text": text.strip(),
+                    "confidence": float(round(conf, 3)),
+                    "bbox": bbox,
+                    "source": "ocr"
+                })
+
+        return extracted
+    except Exception as e:
+        print(f"[OCR] PaddleOCR exception: {e}")
         return []
-
-    np_img = np.array(pil_img.convert("RGB"))
-    results = ocr_engine.ocr(np_img, cls=True)
-
-    extracted = []
-    if results and len(results) > 0 and results[0] is not None:
-        for line in results[0]:
-            box_points = line[0]  # 4 points [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
-            text, conf = line[1]
-
-            xs = [p[0] for p in box_points]
-            ys = [p[1] for p in box_points]
-            bbox = [float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))]
-
-            extracted.append({
-                "text": text.strip(),
-                "confidence": float(round(conf, 3)),
-                "bbox": bbox,
-                "source": "ocr"
-            })
-
-    return extracted
 
 def extract_diagram_text(image_input: Union[Image.Image, np.ndarray]) -> List[Dict[str, Any]]:
     """
@@ -167,7 +178,7 @@ def extract_diagram_text(image_input: Union[Image.Image, np.ndarray]) -> List[Di
     Extracts text regions independently of shape detection.
     Order of preference:
     1. EasyOCR (verified local PyTorch OCR engine)
-    2. PaddleOCR (if available)
+    2. PaddleOCR (if EasyOCR unavailable)
     3. Geometric morphological text region detector fallback
     """
     if isinstance(image_input, np.ndarray):
@@ -179,15 +190,21 @@ def extract_diagram_text(image_input: Union[Image.Image, np.ndarray]) -> List[Di
         rgb = np.array(pil_img.convert("RGB"))
         cv_img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
-    # 1. Try EasyOCR
-    easy_results = extract_text_easyocr(rgb)
-    if easy_results:
-        return easy_results
+    # 1. Try EasyOCR (primary verified neural OCR engine)
+    easy_reader = get_easy_ocr()
+    if easy_reader is not None:
+        try:
+            return extract_text_easyocr(rgb)
+        except Exception as e:
+            print(f"[OCR] EasyOCR failed during execution: {e}")
 
-    # 2. Try PaddleOCR
-    paddle_results = extract_text_paddle(pil_img)
-    if paddle_results:
-        return paddle_results
+    # 2. Try PaddleOCR (if EasyOCR unavailable or crashed)
+    try:
+        paddle_results = extract_text_paddle(pil_img)
+        if paddle_results:
+            return paddle_results
+    except Exception as e:
+        print(f"[OCR] PaddleOCR fallback failed: {e}")
 
     # 3. Geometric morphological text region detector
     boxes = detect_text_regions_morphology(cv_img)

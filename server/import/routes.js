@@ -6,6 +6,7 @@ import { parseSvgDiagram } from './parsers/svgParser.js';
 import { normalizeDiagram } from './normalize.js';
 import { requireAuth } from '../ai/routes.js';
 import { aiRateLimiter } from '../ai/rateLimiter.js';
+import { analyzeDiagramVision } from '../ai/vision.js';
 
 export const importRouter = express.Router();
 
@@ -35,6 +36,48 @@ async function proxyToInferenceAPI(imageBase64, options = {}) {
 
   const data = await response.json();
   return data;
+}
+
+/**
+ * Unified raster image processor:
+ * 1. Tries local FastAPI inference microservice (Port 8000: Preprocessing + Classical CV + EasyOCR)
+ * 2. Cascades to Cloud Vision (GPT-4o / Gemini Flash) if local microservice is offline or errors
+ */
+async function processRasterImage(imgBase64, options = {}) {
+  // 1. Try local inference microservice
+  try {
+    const infResult = await proxyToInferenceAPI(imgBase64, options);
+    if (infResult && infResult.diagram) {
+      return {
+        diagram: infResult.diagram,
+        preprocessing: infResult.preprocessing,
+        modelUsed: infResult.modelUsed || 'local-cv-pipeline',
+      };
+    }
+  } catch (proxyErr) {
+    console.warn('[Import Route] Local inference microservice unavailable or failed, attempting Cloud Vision fallback:', proxyErr.message);
+  }
+
+  // 2. Cloud Vision Fallback (GPT-4o -> Gemini Flash)
+  try {
+    const visionResult = await analyzeDiagramVision(imgBase64, {
+      sessionId: options.sessionId,
+      instruction: 'Extract all diagram nodes, labels, and connecting arrows accurately into the standard diagram schema.',
+    });
+    if (visionResult?.parsed?.nodes) {
+      return {
+        diagram: visionResult.parsed,
+        preprocessing: { fallback: true },
+        modelUsed: visionResult.modelUsed || 'cloud-vision-fallback',
+      };
+    }
+  } catch (visionErr) {
+    console.error('[Import Route] Cloud vision fallback also failed:', visionErr.message);
+  }
+
+  throw new Error(
+    'Image diagram recognition failed. Ensure the inference microservice is running ("npm run dev:inference") or configure OPENAI_API_KEY / GEMINI_API_KEY for cloud fallback.'
+  );
 }
 
 /**
@@ -80,10 +123,10 @@ importRouter.post('/file', requireAuth, aiRateLimiter, async (req, res) => {
     if (detected.format === 'svg') {
       const raw = parseSvgDiagram(detected.text);
       if (raw.fallbackToRaster) {
-        // Fallback to raster vision pipeline
+        // Fallback to raster vision pipeline (local CV + cloud vision fallback)
         const b64 = Buffer.from(detected.text).toString('base64');
         const imgData = `data:image/svg+xml;base64,${b64}`;
-        const infResult = await proxyToInferenceAPI(imgData, { enablePreprocessing, enableHighPrecision, sessionId });
+        const infResult = await processRasterImage(imgData, { enablePreprocessing, enableHighPrecision, sessionId });
         const normalized = normalizeDiagram(infResult.diagram, 'image');
         return res.json({
           status: 'success',
@@ -91,6 +134,7 @@ importRouter.post('/file', requireAuth, aiRateLimiter, async (req, res) => {
           isStructured: false,
           diagram: normalized,
           preprocessing: infResult.preprocessing,
+          modelUsed: infResult.modelUsed,
           fallbackReason: raw.reason,
         });
       }
@@ -104,10 +148,10 @@ importRouter.post('/file', requireAuth, aiRateLimiter, async (req, res) => {
       });
     }
 
-    // 4. Raster Image (PNG, JPG, WEBP) -> Internal FastAPI
+    // 4. Raster Image (PNG, JPG, WEBP) -> Local FastAPI with Cloud Vision Fallback
     if (detected.format === 'raster_image') {
       const imgBase64 = content.startsWith('data:') ? content : `data:${detected.mimeType};base64,${content}`;
-      const infResult = await proxyToInferenceAPI(imgBase64, { enablePreprocessing, enableHighPrecision, sessionId });
+      const infResult = await processRasterImage(imgBase64, { enablePreprocessing, enableHighPrecision, sessionId });
       const normalized = normalizeDiagram(infResult.diagram, 'image');
       return res.json({
         status: 'success',
@@ -115,6 +159,7 @@ importRouter.post('/file', requireAuth, aiRateLimiter, async (req, res) => {
         isStructured: false,
         diagram: normalized,
         preprocessing: infResult.preprocessing,
+        modelUsed: infResult.modelUsed,
       });
     }
 

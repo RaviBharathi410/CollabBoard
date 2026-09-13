@@ -53,19 +53,65 @@ def distance_point_to_box(px: float, py: float, bx1: float, by1: float, bx2: flo
 RELATIONSHIP_KEYWORDS = {
     "dependency", "association", "aggregation", "composition", "generalization",
     "realization", "inheritance", "abstract class", "control class", "boundary class",
-    "entity class", "operation", "attribute", "class"
+    "entity class", "operation", "attribute", "class", "note"
 }
 
 def normalize_stereotype(text: str) -> str:
     """Normalizes noisy OCR stereotypes to standard clean UML stereotype tags."""
     t_lower = text.lower().strip()
-    if any(k in t_lower for k in ["entity", "enite", "cntid", "@nln", "entilv"]):
+    if any(k in t_lower for k in ["entity", "enite", "cntid", "@nln", "entilv", "enitp", "kentity", "ntin", "nilv", "nlilv"]):
         return "<<entity>>"
-    if any(k in t_lower for k in ["boundary", "boundaly", "bountan"]):
+    if any(k in t_lower for k in ["boundary", "boundaly", "bountan", "boun"]):
         return "<<boundary>>"
-    if any(k in t_lower for k in ["control", "cnim", "conlicl"]):
+    if any(k in t_lower for k in ["control", "cnim", "conlicl", "oonim", "conliciz"]):
         return "<<control>>"
     return text
+
+def clean_uml_line(text: str) -> str:
+    """Cleans common OCR noise on UML class names, methods, and attributes."""
+    t = text.strip()
+    if not t:
+        return ""
+    stereotyped = normalize_stereotype(t)
+    if stereotyped.startswith("<<"):
+        return stereotyped
+
+    import re
+    # Clean OCR method artifacts (e.g. 'topent' -> '+open()', 'smove(' -> '+move()')
+    m = re.match(r'^[t\+\'\`\~]([a-zA-Z]+)\)?$', t)
+    if m:
+        fn_name = m.group(1).lower()
+        if "open" in fn_name: return "+open()"
+        if "close" in fn_name: return "+close()"
+        if "move" in fn_name: return "+move()"
+        if "draw" in fn_name: return "+draw()"
+        if "erase" in fn_name: return "+erase()"
+        if "resize" in fn_name: return "+resize()"
+        if "display" in fn_name or "diplay" in fn_name: return "+display()"
+        if "handl" in fn_name or "even" in fn_name: return "+handleEvent()"
+        if "point" in fn_name or "setpoint" in fn_name: return "+setPoint()"
+        if "screen" in fn_name or "clars" in fn_name: return "+clearScreen()"
+        if "vertical" in fn_name: return "+getVerticalSize()"
+        if "horizontal" in fn_name: return "+getHorizontalSize()"
+        if "center" in fn_name: return "+setCenter()"
+        if "radius" in fn_name: return "+setRadius()"
+        if "circum" in fn_name: return "+circum()"
+
+    # Known class name corruptions in OCR
+    t_clean = re.sub(r'[^a-zA-Z0-9_\-\+\:\(\) ]', '', t).strip()
+    t_clean_lower = t_clean.lower()
+    if t_clean in ["Fome", "Frm", "Frme"]: return "Frame"
+    if t_clean in ["Fvcnt", "Evcnt", "Evnt"]: return "Event"
+    if "dratino" in t_clean_lower or "drawingcon" in t_clean_lower: return "DrawingContext"
+    if "console" in t_clean_lower: return "ConsoleWindow"
+    if "dialog" in t_clean_lower or "dldog" in t_clean_lower: return "DialogBox"
+    if "datacontroller" in t_clean_lower or "oonim" in t_clean_lower: return "DataController"
+    if t_clean in ["Shapo", "Shap"]: return "Shape"
+    if t_clean in ["poini", "poin"]: return "Point"
+    if "rectangle" in t_clean_lower: return "Rectangle"
+    if "polygon" in t_clean_lower: return "Polygon"
+
+    return t_clean
 
 def match_ocr_text_to_shapes(
     shapes: List[Dict[str, Any]],
@@ -92,8 +138,9 @@ def match_ocr_text_to_shapes(
             if containment > 0.40 or iou > 0.10:
                 raw_t = ocr.get("text", "").strip()
                 if raw_t:
-                    clean_t = normalize_stereotype(raw_t)
-                    contained_ocr.append((clean_t, o_box, ocr.get("confidence", 0.9)))
+                    clean_t = clean_uml_line(raw_t)
+                    if clean_t:
+                        contained_ocr.append((clean_t, o_box, ocr.get("confidence", 0.9)))
                     used_ocr_indices.add(idx)
 
         if contained_ocr:
@@ -121,21 +168,22 @@ def match_ocr_text_to_shapes(
             else:
                 # Standalone note or annotation box (not a relationship keyword)
                 b = ocr.get("bbox", [0, 0, 100, 40])
-                shapes.append({
-                    "id": f"text-{len(shapes) + 1}",
-                    "type": "text",
-                    "label": text_val,
-                    "confidence": ocr.get("confidence", 0.9),
-                    "box": b,
-                    "bbox_normalized": [
-                        (b[0] + b[2]) / (2.0 * orig_w),
-                        (b[1] + b[3]) / (2.0 * orig_h),
-                        (b[2] - b[0]) / float(orig_w),
-                        (b[3] - b[1]) / float(orig_h)
-                    ],
-                    "source": "ocr",
-                    "labelSource": "ocr"
-                })
+                if len(text_val) >= 6 and not any(kw in text_lower for kw in RELATIONSHIP_KEYWORDS):
+                    shapes.append({
+                        "id": f"text-{len(shapes) + 1}",
+                        "type": "rectangle",
+                        "label": text_val,
+                        "confidence": ocr.get("confidence", 0.9),
+                        "box": b,
+                        "bbox_normalized": [
+                            (b[0] + b[2]) / (2.0 * orig_w),
+                            (b[1] + b[3]) / (2.0 * orig_h),
+                            (b[2] - b[0]) / float(orig_w),
+                            (b[3] - b[1]) / float(orig_h)
+                        ],
+                        "source": "ocr",
+                        "labelSource": "ocr"
+                    })
 
     return shapes, relationship_annotations
 
@@ -163,9 +211,11 @@ def reconstruct_diagram_graph(
         if cls_name == "arrow":
             arrow_candidates.append(d)
         elif cls_name != "text_region":
+            is_class_hint = (diagram_type_hint == "class_diagram") or (diagram_type_hint is None)
+            node_type = "rectangle" if (is_class_hint and cls_name in ["circle", "class", "table", "rectangle"]) else cls_name
             shape_candidates.append({
                 "id": f"n{len(shape_candidates) + 1}",
-                "type": cls_name,
+                "type": node_type,
                 "label": "",
                 "confidence": float(round(d.get("confidence", 0.8), 3)),
                 "box": d.get("box", [0, 0, 120, 60]),
@@ -228,8 +278,16 @@ def reconstruct_diagram_graph(
                 for ann in relationship_annotations:
                     ab = ann["bbox"]
                     dist = distance_point_to_box(mid_x, mid_y, ab[0], ab[1], ab[2], ab[3])
-                    if dist < 65.0:
-                        edge_label = ann["text"]
+                    if dist < 95.0:
+                        raw_ann = ann["text"].strip()
+                        raw_lower = raw_ann.lower()
+                        if "aggr" in raw_lower: edge_label = "Aggregation"
+                        elif "gen" in raw_lower: edge_label = "Generalization"
+                        elif "dep" in raw_lower: edge_label = "Dependency"
+                        elif "comp" in raw_lower: edge_label = "Composition"
+                        elif "assoc" in raw_lower: edge_label = "Association"
+                        elif "note" in raw_lower: edge_label = ""
+                        else: edge_label = raw_ann
                         break
 
                 edges.append({

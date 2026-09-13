@@ -70,8 +70,8 @@ async def import_image(payload: ImportImageRequest):
         # 3. Independent OCR pass (extracts text bounding boxes independently of shapes)
         ocr_regions = extract_diagram_text(image)
 
-        # 4. Shape & Arrow Detection: Primary ONNX with resilient geometric CV fallback
-        detections, detector_method = detect_shapes_and_arrows(image, onnx_detector=detector)
+        # 4. Shape & Arrow Detection: Robust geometric CV pipeline (with contour analysis and compartment merging)
+        detections, detector_method = detect_shapes_and_arrows(image, onnx_detector=None)
 
         # 5. Geometric Reconstruction (matches OCR text boxes to shapes & arrows to endpoints)
         diagram = reconstruct_diagram_graph(
@@ -82,8 +82,8 @@ async def import_image(payload: ImportImageRequest):
             diagram_type_hint=payload.diagramTypeHint
         )
 
-        # 6. Graph Healing: Prune phantom edges & stitch orphans
-        repaired_diagram, healing_telemetry = sanitize_and_heal_graph(diagram)
+        # 6. Graph Sanitization: Prune phantom edges without inventing artificial orphan edges
+        repaired_diagram, healing_telemetry = sanitize_and_heal_graph(diagram, stitch_orphans=False)
 
         return {
             "status": "complete",

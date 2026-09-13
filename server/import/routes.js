@@ -47,11 +47,13 @@ async function processRasterImage(imgBase64, options = {}) {
   const preferredEngine = options.engine || 'cloud';
 
   if (preferredEngine === 'cloud') {
-    // 1. Try Cloud Vision (Gemini Flash / GPT-4o) - understands UML, architecture, and complex text
+    // 1. Try Cloud Vision (GPT-4o / Gemini Flash) - understands UML, architecture, and complex text
     try {
       const visionResult = await analyzeDiagramVision(imgBase64, {
         sessionId: options.sessionId,
-        instruction: 'Extract all diagram nodes, classes, labels, and connecting arrows accurately into standard diagram schema.',
+        preferCloud: true,
+        diagramTypeHint: options.diagramTypeHint || 'class_diagram',
+        instruction: 'Extract all diagram nodes, classes, labels, and connecting arrows accurately into standard diagram schema. Exclude explanatory callout annotations from being nodes.',
       });
       if (visionResult?.parsed?.nodes && visionResult.parsed.nodes.length > 0) {
         return {
@@ -96,7 +98,9 @@ async function processRasterImage(imgBase64, options = {}) {
     try {
       const visionResult = await analyzeDiagramVision(imgBase64, {
         sessionId: options.sessionId,
-        instruction: 'Extract all diagram nodes, classes, labels, and connecting arrows accurately into standard diagram schema.',
+        preferCloud: true,
+        diagramTypeHint: options.diagramTypeHint || 'class_diagram',
+        instruction: 'Extract all diagram nodes, classes, labels, and connecting arrows accurately into standard diagram schema. Exclude explanatory callout annotations from being nodes.',
       });
       if (visionResult?.parsed?.nodes && visionResult.parsed.nodes.length > 0) {
         return {

@@ -129,11 +129,11 @@ def repair_and_parse_diagram(raw: str) -> dict:
         raise ValueError(f"Model output could not be parsed into JSON: {raw[:200]}") from e
 
 
-def sanitize_and_heal_graph(diagram: dict) -> tuple[dict, dict]:
+def sanitize_and_heal_graph(diagram: dict, stitch_orphans: bool = False) -> tuple[dict, dict]:
     """
     Defensive structured-output validation and repair.
     - Prunes phantom edges pointing to non-existent nodes.
-    - Stitches orphan nodes so every extracted node participates in the diagram.
+    - Stitches orphan nodes only when explicitly requested (e.g. for NLP generation).
     - Logs every time healing fires for observability.
     Returns (repaired_diagram, healing_telemetry).
     """
@@ -156,7 +156,7 @@ def sanitize_and_heal_graph(diagram: dict) -> tuple[dict, dict]:
         else:
             pruned_edges.append(f"{src}->{tgt}")
 
-    # 2. Check connectivity and stitch orphan nodes
+    # 2. Check connectivity and stitch orphan nodes only if requested
     connected_nodes = set()
     for e in valid_edges:
         s = e.get("source") or e.get("from")
@@ -167,7 +167,7 @@ def sanitize_and_heal_graph(diagram: dict) -> tuple[dict, dict]:
     orphans = [nid for nid in node_ids if nid not in connected_nodes]
     healed_edges = []
 
-    if orphans and len(node_ids) > 1:
+    if stitch_orphans and orphans and len(node_ids) > 1:
         diag_type = str(diagram.get("type", "")).lower()
         if diag_type == "mindmap" and "n1" in node_id_set:
             for o in orphans:
@@ -273,7 +273,7 @@ def generate_diagram(text: str, diagram_type_hint: Optional[str] = None) -> dict
     diagram.setdefault("ambiguities", [])
 
     # ---- Structured-output validation and repair (with telemetry) -----------
-    diagram, healing_info = sanitize_and_heal_graph(diagram)
+    diagram, healing_info = sanitize_and_heal_graph(diagram, stitch_orphans=True)
     diagram["healingInfo"] = healing_info
 
     return diagram

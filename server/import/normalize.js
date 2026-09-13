@@ -18,7 +18,7 @@
  * Runs defensive graph healing (prunes phantom edges, stitches orphan nodes).
  */
 
-export function sanitizeAndHealGraph(diagram) {
+export function sanitizeAndHealGraph(diagram, stitchOrphans = false) {
   const nodes = diagram.nodes || [];
   const edges = diagram.edges || [];
   const nodeIds = nodes.map((n) => n.id);
@@ -39,7 +39,7 @@ export function sanitizeAndHealGraph(diagram) {
     }
   }
 
-  // 2. Check connectivity and stitch orphan nodes
+  // 2. Check connectivity and stitch orphan nodes only when explicitly enabled (e.g. generative NLP prompts)
   const connectedNodes = new Set();
   for (const e of validEdges) {
     const s = e.source || e.from;
@@ -51,7 +51,7 @@ export function sanitizeAndHealGraph(diagram) {
   const orphans = nodeIds.filter((nid) => !connectedNodes.has(nid));
   const healedEdges = [];
 
-  if (orphans.length > 0 && nodeIds.length > 1) {
+  if (stitchOrphans && orphans.length > 0 && nodeIds.length > 1) {
     for (const o of orphans) {
       const idx = nodeIds.indexOf(o);
       const anchor = idx > 0 ? nodeIds[idx - 1] : nodeIds[1];

@@ -23,7 +23,7 @@ describe('normalizeDiagram & sanitizeAndHealGraph', () => {
       expect(healingTelemetry.prunedEdges).toContain('n1->n999');
     });
 
-    it('stitches orphan nodes to the graph', () => {
+    it('stitches orphan nodes to the graph when explicitly enabled', () => {
       const raw = {
         nodes: [
           { id: 'n1', type: 'rectangle', label: 'Entry' },
@@ -35,13 +35,28 @@ describe('normalizeDiagram & sanitizeAndHealGraph', () => {
         ],
       };
 
-      const { diagram, healingTelemetry } = sanitizeAndHealGraph(raw);
+      const { diagram, healingTelemetry } = sanitizeAndHealGraph(raw, true);
       expect(diagram.edges).toHaveLength(2);
       expect(healingTelemetry.healingApplied).toBe(true);
       expect(healingTelemetry.stitchedNodeCount).toBe(1);
       const stitched = diagram.edges.find((e) => e.target === 'n3');
       expect(stitched).toBeDefined();
       expect(stitched.sourceTag).toBe('healed');
+    });
+
+    it('does not synthesize artificial edges by default (preserves orphan nodes without spiderwebs)', () => {
+      const raw = {
+        nodes: [
+          { id: 'n1', type: 'rectangle', label: 'Class A' },
+          { id: 'n2', type: 'rectangle', label: 'Note Box' }, // Standalone note
+        ],
+        edges: [],
+      };
+
+      const { diagram, healingTelemetry } = sanitizeAndHealGraph(raw, false);
+      expect(diagram.edges).toHaveLength(0);
+      expect(healingTelemetry.healingApplied).toBe(false);
+      expect(healingTelemetry.stitchedEdges).toHaveLength(0);
     });
   });
 

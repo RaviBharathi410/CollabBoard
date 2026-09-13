@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Loader2, Check, Edit2, ImageDown, MessageSquare, ListTree, Share2 } from 'lucide-react';
+import { Loader2, Check, Edit2, ImageDown, MessageSquare, ListTree, Share2, UploadCloud } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { useAuth } from '../context/AuthContext';
 import { getBoardMeta, updateBoardTitle, createBoard, isFirestoreUnavailable } from '../firebase/db';
@@ -240,12 +240,37 @@ export default function BoardPage() {
 
             <button 
               type="button" 
-              className={`btn btn-secondary btn-sm ${isDrawerOpen ? 'active-btn' : ''}`}
-              onClick={() => setIsDrawerOpen(!isDrawerOpen)}
-              title="Toggle Context Drawer"
+              className={`btn btn-secondary btn-sm ${isDrawerOpen && drawerTab === 'chat' ? 'active-btn' : ''}`}
+              onClick={() => {
+                if (isDrawerOpen && drawerTab === 'chat') {
+                  setIsDrawerOpen(false);
+                } else {
+                  setDrawerTab('chat');
+                  setIsDrawerOpen(true);
+                }
+              }}
+              title="Toggle Context & Chat"
             >
               <MessageSquare size={14} />
               <span>Context & Chat</span>
+            </button>
+
+            <button 
+              type="button" 
+              className={`btn btn-secondary btn-sm ${isDrawerOpen && drawerTab === 'import' ? 'active-btn' : ''}`}
+              onClick={() => {
+                if (isDrawerOpen && drawerTab === 'import') {
+                  setIsDrawerOpen(false);
+                } else {
+                  setDrawerTab('import');
+                  setIsDrawerOpen(true);
+                }
+              }}
+              title="Import Diagram or Image (Draw.io, Mermaid, SVG, Whiteboard)"
+              data-testid="open-import-tab-btn"
+            >
+              <UploadCloud size={14} />
+              <span>Import</span>
             </button>
 
             <button

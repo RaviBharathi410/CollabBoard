@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Users, History, Sparkles, UploadCloud, X, Send, Pin } from 'lucide-react';
 import ImportDrawerTab from './ImportDrawerTab';
 import useImportDiagram from '../hooks/useImportDiagram';
@@ -22,6 +22,12 @@ export default function ContextDrawer({
   const [currentTab, setCurrentTab] = useState(activeTab);
   const [chatInput, setChatInput] = useState('');
   const [aiQuestion, setAiQuestion] = useState('');
+
+  useEffect(() => {
+    if (activeTab) {
+      setCurrentTab(activeTab);
+    }
+  }, [activeTab]);
 
   const fallbackStageRef = useRef({ current: null });
   const internalImportHook = useImportDiagram(stageRef || fallbackStageRef);

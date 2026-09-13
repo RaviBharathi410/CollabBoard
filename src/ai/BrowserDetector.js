@@ -1,56 +1,52 @@
-import * as ort from 'onnxruntime-web';
 import { trackAIEvent, AIEvents } from './telemetry';
-
-ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
-ort.env.wasm.numThreads = 1; // Force single thread to avoid SharedArrayBuffer/COOP-COEP issues
-ort.env.wasm.simd = true;
 
 const MODEL_URL = '/models/collabboard_int8.onnx';
 const CLASSES_URL = '/models/classes.json';
 const INPUT_SIZE = 640;
 const CONF_THRESHOLD = 0.30;
 
+let _ort = null;
+async function getOrt() {
+  if (_ort) return _ort;
+  _ort = await import('onnxruntime-web');
+  _ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
+  _ort.env.wasm.numThreads = 1; // Force single thread to avoid SharedArrayBuffer/COOP-COEP issues
+  _ort.env.wasm.simd = true;
+  return _ort;
+}
+
 let _session = null;
 let _classes = null;
 let _loadPromise = null;
+
+/**
+ * BrowserDetector.js
+ * 
+ * ARCHITECTURAL STATUS: FORMERLY RETIRED
+ * The browser-side YOLOv8 INT8 ONNX model (/models/collabboard_int8.onnx) has been
+ * formally retired due to a quantization scale/bias mismatch on the classification head
+ * (originating in commit a73eae3 on June 9, 2026), which clamped confidence scores below 0.00125.
+ * 
+ * To save client bandwidth (preventing an unnecessary 26MB WebAssembly runtime download) and eliminate
+ * dead client compute, the browser model session is explicitly set to null.
+ * Sketch detection proceeds directly to the production cloud vision pipeline (/api/enhance).
+ */
 
 export async function loadBrowserDetector() {
   if (_session && _classes) return { session: _session, classes: _classes };
   if (_loadPromise) return _loadPromise;
 
   _loadPromise = (async () => {
-    console.log('[BrowserDetector] Loading ONNX model...');
-    const t0 = performance.now();
-
-    const executionProviders = ['wasm'];
+    console.info('[BrowserDetector] Browser-side ONNX model formally retired (quantization underflow). Routing sketch detection cloud-first.');
+    _session = null;
     try {
-      if (typeof navigator !== 'undefined' && 'gpu' in navigator) {
-        executionProviders.unshift('webgpu');
-      }
+      const classesRes = await fetch(CLASSES_URL);
+      const classesData = await classesRes.json();
+      _classes = classesData?.classes || [];
     } catch {
-      /* WebGPU unavailable */
+      _classes = ['rectangle', 'circle', 'diamond'];
     }
-
-    try {
-      _session = await ort.InferenceSession.create(MODEL_URL, {
-        executionProviders,
-        graphOptimizationLevel: 'all',
-      });
-    } catch (err) {
-      console.warn('[BrowserDetector] Model load failed (run training/export first):', err.message);
-      _session = null;
-      _classes = (await fetch(CLASSES_URL).then((r) => r.json())).classes;
-      return { session: null, classes: _classes };
-    }
-
-    const classesRes = await fetch(CLASSES_URL);
-    const classesData = await classesRes.json();
-    _classes = classesData.classes;
-
-    const ms = (performance.now() - t0).toFixed(1);
-    console.log(`[BrowserDetector] Ready in ${ms}ms via ${executionProviders[0]}`);
-    trackAIEvent(AIEvents.MODEL_LOADED, { ms: parseFloat(ms), provider: executionProviders[0] });
-    return { session: _session, classes: _classes };
+    return { session: null, classes: _classes };
   })();
 
   return _loadPromise;
@@ -175,6 +171,7 @@ export async function detectInBrowser(konvaStageRef) {
   const imageData = ctx.getImageData(0, 0, img.width, img.height);
 
   const { tensor, meta } = preprocessImageData(imageData, img.width, img.height);
+  const ort = await getOrt();
   const inputName = session.inputNames[0];
   const inputTensor = new ort.Tensor('float32', tensor, [1, 3, INPUT_SIZE, INPUT_SIZE]);
 

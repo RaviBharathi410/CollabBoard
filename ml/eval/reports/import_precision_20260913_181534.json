@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-09-13T18:15:34.396499",
+  "structured_benchmark": {
+    "tests": [
+      {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "ocr_text_match": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "detected_nodes": 4,
+        "expected_nodes": 4,
+        "detected_edges": 3,
+        "expected_edges": 3,
+        "test_id": "drawio_architecture",
+        "format": "drawio",
+        "method": "deterministic_parser"
+      },
+      {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "ocr_text_match": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "detected_nodes": 5,
+        "expected_nodes": 5,
+        "detected_edges": 4,
+        "expected_edges": 4,
+        "test_id": "mermaid_auth",
+        "format": "mermaid",
+        "method": "deterministic_parser"
+      },
+      {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "ocr_text_match": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "detected_nodes": 3,
+        "expected_nodes": 3,
+        "detected_edges": 2,
+        "expected_edges": 2,
+        "test_id": "svg_pipeline",
+        "format": "svg",
+        "method": "deterministic_parser"
+      }
+    ],
+    "mean_node_precision": 1.0,
+    "mean_node_recall": 1.0,
+    "mean_edge_precision": 1.0,
+    "mean_edge_recall": 1.0,
+    "mean_label_accuracy": 1.0,
+    "fidelity": "100% Deterministic Parsing"
+  },
+  "image_benchmark": {
+    "tests": [],
+    "mean_node_precision": 0.0,
+    "mean_node_recall": 0.0,
+    "mean_edge_precision": 0.0,
+    "mean_edge_recall": 0.0,
+    "mean_ocr_match_rate": 0.0,
+    "mean_model_internal_conf": 0.0,
+    "fidelity": "Probabilistic Vision & OCR Pipeline"
+  }
+}

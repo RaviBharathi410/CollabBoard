@@ -1,0 +1,36 @@
+FROM python:3.11-slim
+
+WORKDIR /ml
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better Docker layer caching
+COPY ml/requirements.txt ml/requirements-nlp.txt ./
+
+# Install all ML dependencies (YOLO + HuggingFace NLP stack)
+# torch CPU-only to keep image size manageable on a CPU Docker host.
+# If you have a GPU host, replace the torch line in requirements-nlp.txt
+# with the CUDA-enabled wheel before building:
+#   torch>=2.2.0+cu121  --index-url https://download.pytorch.org/whl/cu121
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-nlp.txt
+
+# Copy ML scripts and dataset seeds
+COPY ml/ .
+
+# HuggingFace model cache directory (mapped to a volume in compose so
+# model weights aren't re-downloaded on every training run)
+ENV HF_HOME=/ml/.hf_cache
+ENV TRANSFORMERS_OFFLINE=0
+
+# One-shot training job.
+# Override CMD in compose for a different model tier or epoch count:
+#   docker compose --profile train run training \
+#       python scripts/train_nlp_model.py --model google/flan-t5-base --epochs 5
+CMD ["python", "scripts/train_nlp_model.py", \
+     "--data",   "datasets/nlp_diagrams", \
+     "--output", "exports/nlp_model", \
+     "--model",  "google/flan-t5-small", \
+     "--epochs", "5", \
+     "--batch",  "8"]

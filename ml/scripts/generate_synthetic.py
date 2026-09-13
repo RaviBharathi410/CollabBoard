@@ -351,9 +351,10 @@ def generate_dataset(output_dir: Path, n_images: int = 5000, train_split: float 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output-dir", default="ml/datasets/synthetic")
-    parser.add_argument("--n-images", type=int, default=5000)
-    parser.add_argument("--train-split", type=float, default=0.85)
+    parser.add_argument("--output-dir", "--output_dir", dest="output_dir", default="ml/datasets/synthetic")
+    parser.add_argument("--n-images", "--total_samples", dest="n_images", type=int, default=5000)
+    parser.add_argument("--curriculum_cfg", default=None, help="Optional curriculum config (ignored)")
+    parser.add_argument("--train-split", "--train_split", dest="train_split", type=float, default=0.85)
     args = parser.parse_args()
     out = Path(args.output_dir)
     if out.exists() and any(out.rglob("*.jpg")):

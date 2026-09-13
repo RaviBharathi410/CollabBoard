@@ -7,6 +7,8 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  sendPasswordResetEmail,
+  sendEmailVerification,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase/config';
 
@@ -70,6 +72,16 @@ export function AuthProvider({ children }) {
     return signOut(auth);
   }
 
+  function resetPassword(email) {
+    return sendPasswordResetEmail(auth, email);
+  }
+
+  function sendVerification(user) {
+    const targetUser = user || auth.currentUser;
+    if (!targetUser) throw new Error('No user is currently signed in to verify.');
+    return sendEmailVerification(targetUser);
+  }
+
   useEffect(() => {
     let unsubscribe;
 
@@ -85,6 +97,19 @@ export function AuthProvider({ children }) {
       }
 
       unsubscribe = onAuthStateChanged(auth, (user) => {
+        if (!user && import.meta.env.DEV && typeof window !== 'undefined') {
+          try {
+            const e2eUser = window.__E2E_USER__ || JSON.parse(sessionStorage.getItem('e2e_user') || 'null');
+            if (e2eUser) {
+              setCurrentUser({
+                ...e2eUser,
+                getIdToken: async () => e2eUser.token || 'e2e-dev-token',
+              });
+              setLoading(false);
+              return;
+            }
+          } catch (_) { /* ignore */ }
+        }
         setCurrentUser(user);
         setLoading(false);
         if (user) setAuthError(null);
@@ -107,6 +132,8 @@ export function AuthProvider({ children }) {
     login,
     loginWithGoogle,
     logout,
+    resetPassword,
+    sendVerification,
   };
 
   return (

@@ -4,10 +4,14 @@ import express from 'express';
 import cors from 'cors';
 import admin from 'firebase-admin';
 import * as Y from 'yjs';
-import fs from 'fs';
-import path from 'path';
 import net from 'net';
 import { mountAIRoutes } from './server/ai/routes.js';
+import { importRouter } from './server/import/routes.js';
+import { validateEnvironment } from './server/config/envValidator.js';
+import { errorMonitorMiddleware, getMetricsSummary } from './server/monitoring/errorMonitor.js';
+
+// Structural security check at boot: aborts if insecure flags (e.g. auth bypass) are set in production
+validateEnvironment(process.env);
 
 function isPortAvailable(port) {
   return new Promise((resolve) => {
@@ -17,16 +21,6 @@ function isPortAvailable(port) {
       .once('listening', () => tester.close(() => resolve(true)))
       .listen(port);
   });
-}
-
-const DEBUG_LOG = path.resolve('debug-c2ad74.log');
-function serverLog(message, data, hypothesisId) {
-  try {
-    fs.appendFileSync(
-      DEBUG_LOG,
-      JSON.stringify({ sessionId: 'c2ad74', location: 'server.js', message, data, timestamp: Date.now(), hypothesisId, runId: 'post-fix-v2' }) + '\n'
-    );
-  } catch (_) { /* ignore */ }
 }
 
 // ── 0. Firebase Initialization ──
@@ -52,8 +46,6 @@ const HOCUSPOCUS_PORT = parseInt(process.env.HOCUSPOCUS_PORT || '1234', 10);
 const hocuspocusServer = new Server({
   port: HOCUSPOCUS_PORT,
   onConnect(data) {
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.documentName);
-    serverLog('client connected', { documentName: data.documentName, isUuid, isTemplateSlug: !isUuid }, 'H1');
     console.log(`🔌 Client connected to document: ${data.documentName}`);
   },
   onDisconnect(data) {
@@ -69,7 +61,6 @@ const hocuspocusServer = new Server({
       }
     } catch (err) {
       if (err?.code === 7 || err?.reason === 'SERVICE_DISABLED') {
-        serverLog('firestore disabled', { documentName: data.documentName, reason: err.reason }, 'H8');
         db = null;
         console.warn('⚠️ Firestore API disabled — canvas sync will run in memory only.');
       } else {
@@ -89,7 +80,6 @@ const hocuspocusServer = new Server({
       console.log(`💾 Saved board ${data.documentName} to Firebase`);
     } catch (err) {
       if (err?.code === 7 || err?.reason === 'SERVICE_DISABLED') {
-        serverLog('firestore disabled on save', { documentName: data.documentName }, 'H8');
         db = null;
       } else {
         console.error(`❌ Failed to save board ${data.documentName}:`, err.message);
@@ -126,8 +116,14 @@ app.use(
   })
 );
 app.use(express.json({ limit: '10mb' }));
+app.use(errorMonitorMiddleware);
+
+app.get('/api/health/metrics', (req, res) => {
+  res.json(getMetricsSummary());
+});
 
 mountAIRoutes(app);
+app.use('/api/import', importRouter);
 
 async function main() {
   const httpAvailable = await isPortAvailable(PORT);

@@ -1,41 +1,56 @@
 import React from 'react';
-import { Layer, Circle } from 'react-konva';
+import { Layer, Line } from 'react-konva';
+
+export const GRID_SIZE = 24;
+
+export function calculateGridBounds({ width, height, scale, position, gridSize = GRID_SIZE }) {
+  const startX = (Math.floor(-position.x / scale / gridSize) * gridSize) || 0;
+  const endX = (Math.floor((width - position.x) / scale / gridSize) * gridSize) || 0;
+  const startY = (Math.floor(-position.y / scale / gridSize) * gridSize) || 0;
+  const endY = (Math.floor((height - position.y) / scale / gridSize) * gridSize) || 0;
+  return { startX, endX, startY, endY };
+}
 
 export default function GridLayer({ width, height, scale, position }) {
-  // Constants for grid
-  const DOT_RADIUS = 1;
-  const GRID_SIZE = 20;
-  
   // Calculate viewport bounds in world coordinates
-  const startX = Math.floor(-position.x / scale / GRID_SIZE) * GRID_SIZE;
-  const endX = Math.floor((width - position.x) / scale / GRID_SIZE) * GRID_SIZE;
-  
-  const startY = Math.floor(-position.y / scale / GRID_SIZE) * GRID_SIZE;
-  const endY = Math.floor((height - position.y) / scale / GRID_SIZE) * GRID_SIZE;
+  const { startX, endX, startY, endY } = calculateGridBounds({ width, height, scale, position, gridSize: GRID_SIZE });
 
-  // Generate dot coordinates
-  const dots = [];
+  // Don't render excessive lines at deep zoom-out
+  if (scale < 0.25) return <Layer listening={false} />;
+
+  const lines = [];
+
+  // Vertical lines
   for (let x = startX; x <= endX; x += GRID_SIZE) {
-    for (let y = startY; y <= endY; y += GRID_SIZE) {
-      dots.push({ x, y });
-    }
+    const isMajor = Math.round(x) % (GRID_SIZE * 5) === 0;
+    lines.push(
+      <Line
+        key={`v-${x}`}
+        points={[x, startY, x, endY]}
+        stroke="#DAD6CC"
+        strokeWidth={(isMajor ? 1.0 : 0.6) / scale}
+        opacity={isMajor ? 0.65 : 0.35}
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+    );
   }
 
-  // Optimize grid rendering at low zoom
-  if (scale < 0.3) return <Layer listening={false} />;
+  // Horizontal lines
+  for (let y = startY; y <= endY; y += GRID_SIZE) {
+    const isMajor = Math.round(y) % (GRID_SIZE * 5) === 0;
+    lines.push(
+      <Line
+        key={`h-${y}`}
+        points={[startX, y, endX, y]}
+        stroke="#DAD6CC"
+        strokeWidth={(isMajor ? 1.0 : 0.6) / scale}
+        opacity={isMajor ? 0.65 : 0.35}
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+    );
+  }
 
-  return (
-    <Layer listening={false}>
-      {dots.map((dot, i) => (
-        <Circle
-          key={i}
-          x={dot.x}
-          y={dot.y}
-          radius={DOT_RADIUS / scale} // Keep dot size constant regardless of zoom
-          fill="#D1D5DB"
-          perfectDrawEnabled={false}
-        />
-      ))}
-    </Layer>
-  );
+  return <Layer listening={false}>{lines}</Layer>;
 }

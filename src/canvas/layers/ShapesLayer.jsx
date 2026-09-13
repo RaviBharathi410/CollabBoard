@@ -2,6 +2,32 @@ import React from 'react';
 import { Layer, Rect, Ellipse, Arrow, Line, Text, Transformer, Group } from 'react-konva';
 import useCanvasStore from '../hooks/useCanvasStore';
 
+export function computeTransformedDimensions(shape, { scaleX = 1, scaleY = 1, x, y, width, height, radiusX, radiusY }) {
+  const updates = { x, y };
+
+  if (shape.type === 'rectangle') {
+    const origW = width !== undefined ? width : (shape.width || 0);
+    const origH = height !== undefined ? height : (shape.height || 0);
+    updates.width = Math.max(5, origW * scaleX);
+    updates.height = Math.max(5, origH * scaleY);
+  } else if (shape.type === 'circle') {
+    const origRx = radiusX !== undefined ? radiusX : (shape.radiusX || 0);
+    const origRy = radiusY !== undefined ? radiusY : (shape.radiusY || 0);
+    updates.radiusX = Math.max(5, origRx * scaleX);
+    updates.radiusY = Math.max(5, origRy * scaleY);
+  } else if (shape.type === 'text') {
+    updates.fontSize = Math.max(10, (shape.fontSize || 15) * scaleX);
+    updates.width = (width !== undefined ? width : (shape.width || 0)) * scaleX;
+  }
+
+  return updates;
+}
+
+export function transformBoundBox(oldBox, newBox) {
+  if (newBox.width < 5 || newBox.height < 5) return oldBox;
+  return newBox;
+}
+
 export default function ShapesLayer({ selectedIds, onSelect }) {
   const shapes = useCanvasStore((state) => state.shapes);
   const updateShapeSilent = useCanvasStore((state) => state.updateShapeSilent);
@@ -32,19 +58,16 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
     node.scaleX(1);
     node.scaleY(1);
 
-    const updates = { x: node.x(), y: node.y() };
-
-    if (shape.type === 'rectangle') {
-      updates.width = Math.max(5, node.width() * scaleX);
-      updates.height = Math.max(5, node.height() * scaleY);
-    } else if (shape.type === 'circle') {
-      updates.radiusX = Math.max(5, node.radiusX() * scaleX);
-      updates.radiusY = Math.max(5, node.radiusY() * scaleY);
-    } else if (shape.type === 'text') {
-       // Only apply scale to font size
-       updates.fontSize = Math.max(10, (shape.fontSize || 16) * scaleX);
-       updates.width = node.width() * scaleX;
-    }
+    const updates = computeTransformedDimensions(shape, {
+      scaleX,
+      scaleY,
+      x: node.x(),
+      y: node.y(),
+      width: node.width?.(),
+      height: node.height?.(),
+      radiusX: node.radiusX?.(),
+      radiusY: node.radiusY?.(),
+    });
     
     updateShape(shape.id, updates);
   };
@@ -57,14 +80,15 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
     updateShape(shape.id, { x: e.target.x(), y: e.target.y() });
   };
 
-  const AiBadge = ({ shape, width = 80, height = 40 }) => {
+  // Tactile ochre AI Badge
+  const AiBadge = ({ shape, width = 80 }) => {
     if (!shape.aiGenerated) return null;
     const bx = (shape.width ?? width) - 4;
     const by = 4;
     return (
       <Group x={bx} y={by} listening={false}>
-        <Rect x={-28} y={0} width={28} height={14} fill="#6C63FF" cornerRadius={3} />
-        <Text x={-26} y={2} text="✦ AI" fontSize={9} fill="#fff" fontFamily="Plus Jakarta Sans" />
+        <Rect x={-32} y={0} width={32} height={15} fill="#9E5826" cornerRadius={2} />
+        <Text x={-30} y={3} text="✦ AI" fontSize={9} fill="#FFFFFF" fontFamily="IBM Plex Mono" fontStyle="bold" />
       </Group>
     );
   };
@@ -91,9 +115,13 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
               <Rect
                 width={shape.width}
                 height={shape.height}
-                fill={shape.fill || '#EEEDfe'}
-                stroke={shape.stroke || '#6C63FF'}
-                strokeWidth={shape.strokeWidth || 2}
+                fill={shape.fill || '#FFFFFF'}
+                stroke={shape.stroke || '#26241F'}
+                strokeWidth={shape.strokeWidth || 1.5}
+                cornerRadius={3}
+                shadowColor="rgba(38, 36, 31, 0.05)"
+                shadowBlur={3}
+                shadowOffsetY={1}
               />
               <AiBadge shape={shape} width={shape.width} height={shape.height} />
             </Group>
@@ -107,9 +135,12 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
               <Ellipse
                 radiusX={rx}
                 radiusY={ry}
-                fill={shape.fill || '#EEEDfe'}
-                stroke={shape.stroke || '#6C63FF'}
-                strokeWidth={shape.strokeWidth || 2}
+                fill={shape.fill || '#FFFFFF'}
+                stroke={shape.stroke || '#26241F'}
+                strokeWidth={shape.strokeWidth || 1.5}
+                shadowColor="rgba(38, 36, 31, 0.05)"
+                shadowBlur={3}
+                shadowOffsetY={1}
               />
               <AiBadge shape={shape} width={rx * 2} height={ry * 2} />
             </Group>
@@ -121,12 +152,12 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
               key={shape.id}
               {...commonProps(shape)}
               points={shape.points}
-              stroke={shape.stroke || '#1A1A2E'}
-              strokeWidth={shape.strokeWidth || 2}
-              fill={shape.stroke || '#1A1A2E'}
+              stroke={shape.stroke || '#26241F'}
+              strokeWidth={shape.strokeWidth || 1.5}
+              fill={shape.stroke || '#26241F'}
               dash={shape.dash}
-              pointerLength={10}
-              pointerWidth={10}
+              pointerLength={8}
+              pointerWidth={8}
             />
           );
         }
@@ -136,9 +167,9 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
               key={shape.id}
               {...commonProps(shape)}
               points={shape.points}
-              stroke={shape.stroke || '#1A1A2E'}
-              strokeWidth={shape.strokeWidth || 3}
-              tension={0.5}
+              stroke={shape.stroke || '#26241F'}
+              strokeWidth={shape.strokeWidth || 2}
+              tension={0.4}
               lineCap="round"
               lineJoin="round"
             />
@@ -150,10 +181,11 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
               key={shape.id}
               {...commonProps(shape)}
               text={shape.text}
-              fontSize={shape.fontSize || 16}
-              fontFamily="Plus Jakarta Sans"
-              fill={shape.fill || '#1A1A2E'}
+              fontSize={shape.fontSize || 14}
+              fontFamily="IBM Plex Sans"
+              fill={shape.fill || '#26241F'}
               width={shape.width}
+              lineHeight={1.3}
             />
           );
         }
@@ -161,10 +193,13 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
       })}
       <Transformer
         ref={trRef}
-        boundBoxFunc={(oldBox, newBox) => {
-          if (newBox.width < 5 || newBox.height < 5) return oldBox;
-          return newBox;
-        }}
+        borderStroke="#2B5C8F"
+        borderStrokeWidth={1.5}
+        anchorStroke="#2B5C8F"
+        anchorFill="#FFFFFF"
+        anchorSize={8}
+        anchorCornerRadius={1}
+        boundBoxFunc={transformBoundBox}
       />
     </Layer>
   );

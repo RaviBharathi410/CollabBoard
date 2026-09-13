@@ -7,12 +7,17 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies & Build Output
 node_modules
 dist
 dist-ssr
 *.local
+.venv/
+__pycache__/
+*.pyc
+*/__pycache__/*
 
-# Editor directories and files
+# Editor & OS files
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -23,12 +28,30 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment variables
+# Environment & Secrets
 .env
+.env.local
+.env.*.local
 .env.*
 !.env.example
+*.pem
+*.key
+firebase-service-account*.json
 
 # Firebase
 .firebase/
 firebase-debug.log
 firebase-debug.*.log
+
+# Testing & Coverage
+coverage/
+playwright-report/
+test-results/
+
+# ML Artifacts, Checkpoints & Large Data
+ml/exports/
+ml/datasets/
+ml/replay_buffers/
+mlflow.db
+.retrain_gate_report.json
+server/logs/*.ndjson

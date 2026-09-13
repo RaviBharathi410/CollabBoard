@@ -9,17 +9,22 @@ import GridLayer from './layers/GridLayer';
 import ShapesLayer from './layers/ShapesLayer';
 import CursorLayer from './layers/CursorLayer';
 import ClarificationPopup from './components/ClarificationPopup';
-import AskPanel from './components/AskPanel';
 import AIStatusBar from './components/AIStatusBar';
-import { Sparkles, MessageCircle } from 'lucide-react';
+import Toolbar from './ui/Toolbar';
+import PropertiesPanel from './ui/PropertiesPanel';
+import OutlineMode from './components/OutlineMode';
+import TracingOverlay from './components/TracingOverlay';
+import { Sparkles } from 'lucide-react';
 
-export default function CanvasStage() {
+export default function CanvasStage({ isOutlineOpen: externalOutlineOpen, onCloseOutline }) {
   const { id } = useParams();
   const containerRef = useRef(null);
   const stageRef = useRef(null);
   const [size, setSize] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [marquee, setMarquee] = useState(null);
-  const [askOpen, setAskOpen] = useState(false);
+  const [internalOutlineOpen, setInternalOutlineOpen] = useState(false);
+  const isOutlineOpen = externalOutlineOpen !== undefined ? externalOutlineOpen : internalOutlineOpen;
+
   const isMarqueeDrawing = useRef(false);
   const marqueeStart = useRef({ x: 0, y: 0 });
 
@@ -29,7 +34,6 @@ export default function CanvasStage() {
     state: aiState,
     enhanceDiagram,
     answerClarification,
-    askQuestion,
     retryEnhance,
     dismissError,
     applySuggestion,
@@ -55,9 +59,10 @@ export default function CanvasStage() {
     return () => window.removeEventListener('resize', checkSize);
   }, []);
 
+  // Keyboard shortcut listener
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
 
       const setTool = useCanvasStore.getState().setActiveTool;
       const { undo, redo, deleteShapes, selectedIds } = useCanvasStore.getState();
@@ -75,11 +80,19 @@ export default function CanvasStage() {
         }
       } else {
         const key = e.key.toLowerCase();
+        if (key === 'o') {
+          // Toggle Outline Mode per redesign spec
+          if (onCloseOutline && externalOutlineOpen) {
+            onCloseOutline();
+          } else {
+            setInternalOutlineOpen((prev) => !prev);
+          }
+        }
         if (key === 'v') setTool('select');
         if (key === 'h') setTool('hand');
         if (key === 'm') setTool('marquee');
         if (key === 'r') setTool('rectangle');
-        if (key === 'o') setTool('circle');
+        if (key === 'c') setTool('circle');
         if (key === 'a') setTool('arrow');
         if (key === 'p') setTool('pencil');
         if (key === 't') setTool('text');
@@ -87,7 +100,7 @@ export default function CanvasStage() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [externalOutlineOpen, onCloseOutline]);
 
   const isDrawing = useRef(false);
   const newShapeId = useRef(null);
@@ -140,17 +153,17 @@ export default function CanvasStage() {
     startPos.current = pos;
 
     if (activeTool === 'rectangle') {
-      newShapeId.current = addShape({ type: 'rectangle', x: pos.x, y: pos.y, width: 0, height: 0 });
+      newShapeId.current = addShape({ type: 'rectangle', x: pos.x, y: pos.y, width: 0, height: 0, fill: '#FFFFFF', stroke: '#26241F' });
     } else if (activeTool === 'circle') {
-      newShapeId.current = addShape({ type: 'circle', x: pos.x, y: pos.y, radiusX: 0, radiusY: 0 });
+      newShapeId.current = addShape({ type: 'circle', x: pos.x, y: pos.y, radiusX: 0, radiusY: 0, fill: '#FFFFFF', stroke: '#26241F' });
     } else if (activeTool === 'arrow') {
-      newShapeId.current = addShape({ type: 'arrow', x: 0, y: 0, points: [pos.x, pos.y, pos.x, pos.y] });
+      newShapeId.current = addShape({ type: 'arrow', x: 0, y: 0, points: [pos.x, pos.y, pos.x, pos.y], stroke: '#26241F' });
     } else if (activeTool === 'pencil') {
-      newShapeId.current = addShape({ type: 'pencil', x: 0, y: 0, points: [pos.x, pos.y] });
+      newShapeId.current = addShape({ type: 'pencil', x: 0, y: 0, points: [pos.x, pos.y], stroke: '#26241F' });
     } else if (activeTool === 'text' && clickedOnEmpty) {
-      const text = window.prompt('Enter text:');
+      const text = window.prompt('Enter drafting text:');
       if (text) {
-        const shapeId = addShape({ type: 'text', x: pos.x, y: pos.y, text, width: 200 });
+        const shapeId = addShape({ type: 'text', x: pos.x, y: pos.y, text, width: 160, fill: '#26241F' });
         setSelectedIds([shapeId]);
       }
       isDrawing.current = false;
@@ -161,46 +174,47 @@ export default function CanvasStage() {
   const handlePointerMove = (e) => {
     const stage = e.target.getStage();
     const pos = getPointerPos(stage);
+
     updateCursor(pos.x, pos.y);
 
     if (isMarqueeDrawing.current) {
-      const sx = marqueeStart.current.x;
-      const sy = marqueeStart.current.y;
+      const x1 = marqueeStart.current.x;
+      const y1 = marqueeStart.current.y;
+      const x2 = pos.x;
+      const y2 = pos.y;
       setMarquee({
-        x: Math.min(pos.x, sx),
-        y: Math.min(pos.y, sy),
-        width: Math.abs(pos.x - sx),
-        height: Math.abs(pos.y - sy),
+        x: Math.min(x1, x2),
+        y: Math.min(y1, y2),
+        width: Math.abs(x2 - x1),
+        height: Math.abs(y2 - y1),
       });
       return;
     }
 
     if (!isDrawing.current || !newShapeId.current) return;
-
-    const sx = startPos.current.x;
-    const sy = startPos.current.y;
-    const store = useCanvasStore.getState();
+    const updateShapeSilent = useCanvasStore.getState().updateShapeSilent;
 
     if (activeTool === 'rectangle') {
-      store.updateShapeSilent(newShapeId.current, {
-        x: Math.min(pos.x, sx),
-        y: Math.min(pos.y, sy),
-        width: Math.abs(pos.x - sx),
-        height: Math.abs(pos.y - sy),
+      const w = pos.x - startPos.current.x;
+      const h = pos.y - startPos.current.y;
+      updateShapeSilent(newShapeId.current, {
+        x: w < 0 ? pos.x : startPos.current.x,
+        y: h < 0 ? pos.y : startPos.current.y,
+        width: Math.abs(w),
+        height: Math.abs(h),
       });
     } else if (activeTool === 'circle') {
-      store.updateShapeSilent(newShapeId.current, {
-        radiusX: Math.abs(pos.x - sx),
-        radiusY: Math.abs(pos.y - sy),
-      });
+      const rx = Math.abs(pos.x - startPos.current.x);
+      const ry = Math.abs(pos.y - startPos.current.y);
+      updateShapeSilent(newShapeId.current, { radiusX: rx, radiusY: ry });
     } else if (activeTool === 'arrow') {
-      store.updateShapeSilent(newShapeId.current, {
-        points: [sx, sy, pos.x, pos.y],
+      updateShapeSilent(newShapeId.current, {
+        points: [startPos.current.x, startPos.current.y, pos.x, pos.y],
       });
     } else if (activeTool === 'pencil') {
-      const shape = store.shapes.find((s) => s.id === newShapeId.current);
+      const shape = useCanvasStore.getState().shapes.find((s) => s.id === newShapeId.current);
       if (shape) {
-        store.updateShapeSilent(newShapeId.current, {
+        updateShapeSilent(newShapeId.current, {
           points: [...shape.points, pos.x, pos.y],
         });
       }
@@ -210,117 +224,104 @@ export default function CanvasStage() {
   const handlePointerUp = () => {
     if (isMarqueeDrawing.current) {
       isMarqueeDrawing.current = false;
-      useCanvasStore.getState().setActiveTool('select');
       return;
     }
-
-    if (isDrawing.current) {
-      isDrawing.current = false;
-      if (newShapeId.current) {
-        const store = useCanvasStore.getState();
-        const shape = store.shapes.find((s) => s.id === newShapeId.current);
-        if (shape) {
-          const isTooSmall =
-            (shape.type === 'rectangle' && shape.width < 5 && shape.height < 5) ||
-            (shape.type === 'circle' && shape.radiusX < 5 && shape.radiusY < 5) ||
-            (shape.type === 'arrow' &&
-              Math.abs(shape.points[0] - shape.points[2]) < 5 &&
-              Math.abs(shape.points[1] - shape.points[3]) < 5) ||
-            (shape.type === 'pencil' && shape.points.length < 4);
-
-          if (isTooSmall) {
-            store.deleteShapes([shape.id]);
-          } else {
-            store.updateShape(shape.id, { ...shape });
-            setSelectedIds([shape.id]);
-          }
-        }
-      }
-      newShapeId.current = null;
-      useCanvasStore.getState().setActiveTool('select');
-    }
+    if (!isDrawing.current) return;
+    isDrawing.current = false;
+    newShapeId.current = null;
+    useCanvasStore.getState().setActiveTool('select');
   };
 
+  const isDraggable = activeTool === 'hand';
   const screenMarquee = marqueeToScreen(marquee);
-  const isBusy = aiState.isProcessing || aiState.isAsking;
-
-  const clarificationAnchor = (() => {
-    const clar = aiState.clarification;
-    if (!clar?.nodeId || !stageRef.current) return null;
-    const shapes = useCanvasStore.getState().shapes;
-    const target = shapes.find((s) => s.id === clar.nodeId);
-    if (!target) return null;
-    const stage = stageRef.current;
-    const sx = stage.scaleX() || 1;
-    const sy = stage.scaleY() || 1;
-    let cx = target.x;
-    let cy = target.y;
-    if (target.type === 'rectangle') {
-      cx += (target.width || 0) / 2;
-      cy += (target.height || 0) / 2;
-    } else if (target.type === 'circle') {
-      cx = target.x;
-      cy = target.y;
-    }
-    return {
-      x: cx * sx + position.x,
-      y: cy * sy + position.y,
-    };
-  })();
+  const isBusy = aiState.isProcessing;
 
   return (
     <div
-      id="canvas-stage"
       ref={containerRef}
+      className="canvas-container-root bg-graph-paper"
+      id="canvas-stage"
       style={{
         width: '100%',
         height: '100%',
-        overflow: 'hidden',
-        background: 'var(--color-bg-primary)',
         position: 'relative',
+        cursor: activeTool === 'hand' ? 'grab' : activeTool === 'pencil' ? 'crosshair' : 'default',
+        overflow: 'hidden',
       }}
     >
       <Stage
         ref={stageRef}
         width={size.width}
         height={size.height}
-        onWheel={handleWheel}
         scaleX={scale}
         scaleY={scale}
         x={position.x}
         y={position.y}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        draggable={activeTool === 'hand'}
-        style={{
-          cursor:
-            activeTool === 'hand'
-              ? 'grab'
-              : activeTool === 'marquee'
-                ? 'crosshair'
-                : activeTool !== 'select'
-                  ? 'crosshair'
-                  : 'default',
-        }}
+        draggable={isDraggable}
+        onWheel={handleWheel}
+        onMouseDown={handlePointerDown}
+        onMouseMove={handlePointerMove}
+        onMouseUp={handlePointerUp}
+        onTouchStart={handlePointerDown}
+        onTouchMove={handlePointerMove}
+        onTouchEnd={handlePointerUp}
       >
         <GridLayer width={size.width} height={size.height} scale={scale} position={position} />
-        <ShapesLayer selectedIds={selectedIds} onSelect={(shapeId) => setSelectedIds([shapeId])} />
+        <ShapesLayer selectedIds={selectedIds} onSelect={(id) => setSelectedIds([id])} />
         <CursorLayer others={others} />
       </Stage>
 
-      {screenMarquee && screenMarquee.width > 2 && (
+      {/* Floating Bottom-Center Drafting Toolbar */}
+      <Toolbar />
+
+      {/* Properties Panel for selected shapes */}
+      <PropertiesPanel />
+
+      {/* Accessible Outline Mode Drawer */}
+      <OutlineMode 
+        isOpen={isOutlineOpen} 
+        onClose={() => {
+          if (onCloseOutline) onCloseOutline();
+          else setInternalOutlineOpen(false);
+        }} 
+      />
+
+      {/* Ochre Tracing-Paper AI Overlay */}
+      <TracingOverlay
+        isVisible={aiState.stage === 'preview' || Boolean(aiState.clarification)}
+        suggestionTitle="AI Diagram Layout Blueprint"
+        nodeCount={useCanvasStore.getState().shapes.filter((s) => s.aiGenerated).length}
+        onAccept={() => {
+          // Commit preview shapes to permanent ink state
+          const store = useCanvasStore.getState();
+          store.shapes.forEach((s) => {
+            if (s.aiGenerated && (s.opacity ?? 1) < 1) {
+              store.updateShape(s.id, { opacity: 1, fill: '#FFFFFF', stroke: '#26241F' });
+            }
+          });
+        }}
+        onDismiss={() => {
+          // Remove preview shapes
+          const store = useCanvasStore.getState();
+          const previewIds = store.shapes.filter((s) => s.aiGenerated && (s.opacity ?? 1) < 1).map((s) => s.id);
+          if (previewIds.length > 0) store.deleteShapes(previewIds);
+        }}
+      />
+
+      {/* Marquee Region Visualizer */}
+      {screenMarquee && screenMarquee.width > 2 && screenMarquee.height > 2 && (
         <div
           className="marquee-overlay"
           style={{
-            left: screenMarquee.left,
-            top: screenMarquee.top,
-            width: screenMarquee.width,
-            height: screenMarquee.height,
+            left: `${screenMarquee.left}px`,
+            top: `${screenMarquee.top}px`,
+            width: `${screenMarquee.width}px`,
+            height: `${screenMarquee.height}px`,
           }}
         />
       )}
 
+      {/* AI Processing Status */}
       <AIStatusBar
         stage={aiState.stage}
         progress={aiState.progress}
@@ -335,94 +336,63 @@ export default function CanvasStage() {
         clarification={aiState.clarification}
         isProcessing={aiState.isProcessing}
         onAnswer={answerClarification}
-        anchor={clarificationAnchor}
       />
 
-      <AskPanel
-        open={askOpen}
-        onClose={() => setAskOpen(false)}
-        onAsk={askQuestion}
-        onApplySuggestion={applySuggestion}
-        askResponse={aiState.askResponse}
-        isAsking={aiState.isAsking}
-      />
-
-      <div className="ai-fab-container">
+      {/* Quiet AI Enhance Action Button */}
+      <div className="drafting-ai-action-wrap">
         <button
           type="button"
-          className="ai-fab ai-fab-secondary"
-          onClick={() => setAskOpen(true)}
-          disabled={isBusy}
-          title="Ask AI about your diagram"
-        >
-          <MessageCircle size={18} />
-          <span>Ask me</span>
-        </button>
-        <button
-          type="button"
-          className="ai-fab"
+          className="drafting-ai-btn"
           onClick={handleEnhance}
           disabled={isBusy}
-          title={marquee ? 'Enhance selected region' : 'Enhance entire canvas'}
+          title={marquee ? 'Enhance selected region with AI' : 'Draft full diagram from sketch'}
         >
-          <Sparkles size={18} />
-          <span>{aiState.isProcessing ? 'Enhancing...' : 'Enhance with AI'}</span>
+          <Sparkles size={15} />
+          <span>{aiState.isProcessing ? 'Drafting...' : 'AI Enhance'}</span>
         </button>
       </div>
 
       <style>{`
+        .canvas-container-root {
+          background-color: var(--surface-paper);
+        }
         .marquee-overlay {
           position: absolute;
-          border: 2px dashed #6c63ff;
-          background: rgba(108, 99, 255, 0.08);
+          border: 1.5px dashed var(--ochre);
+          background: var(--ochre-translucent);
           pointer-events: none;
-          z-index: 40;
-          border-radius: 4px;
+          z-index: 25;
+          border-radius: 3px;
         }
-        .ai-fab-container {
+        .drafting-ai-action-wrap {
           position: absolute;
           bottom: 24px;
           right: 24px;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 10px;
-          z-index: 50;
+          z-index: 30;
         }
-        .ai-fab {
-          background: var(--color-brand);
-          color: #fff;
-          border: none;
-          padding: 12px 20px;
-          border-radius: 100px;
-          font-weight: 600;
-          font-size: 0.875rem;
+        .drafting-ai-btn {
+          background: var(--moss);
+          color: var(--ink-white);
+          border: 1px solid var(--moss);
+          padding: 8px 16px;
+          border-radius: 4px;
+          font-family: var(--font-sans);
+          font-size: 13px;
+          font-weight: 500;
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 7px;
           cursor: pointer;
-          box-shadow: 0 8px 24px rgba(108, 99, 255, 0.3);
-          transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+          box-shadow: var(--shadow-sm);
+          transition: background-color 150ms ease, box-shadow 150ms ease;
         }
-        .ai-fab-secondary {
-          background: #fff;
-          color: #6c63ff;
-          border: 1px solid #e5e7eb;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        .drafting-ai-btn:hover:not(:disabled) {
+          background: var(--moss-hover);
+          box-shadow: var(--shadow-md);
         }
-        .ai-fab-secondary:hover:not(:disabled) {
-          background: #eeedfe;
-        }
-        .ai-fab:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 12px 32px rgba(108, 99, 255, 0.4);
-          background: var(--color-brand-dark);
-        }
-        .ai-fab:disabled,
-        .ai-fab-secondary:disabled {
-          opacity: 0.7;
+        .drafting-ai-btn:disabled {
+          opacity: 0.6;
           cursor: not-allowed;
-          transform: none;
         }
       `}</style>
     </div>

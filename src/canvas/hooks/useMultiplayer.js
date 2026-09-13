@@ -3,7 +3,6 @@ import * as Y from 'yjs';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import useCanvasStore from './useCanvasStore';
 import { setYjsDocument } from './yjsBridge';
-import { agentLog } from '../../debug/agentLog';
 
 // We assign a random color for the user's cursor
 const cursorColors = ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899'];
@@ -19,9 +18,6 @@ export default function useMultiplayer(documentName) {
 
   useEffect(() => {
     const gen = ++mountGen.current;
-    // #region agent log
-    agentLog('useMultiplayer.js:mount', 'multiplayer mount', { documentName: documentName || 'default-room' }, 'H6-H7', 'post-fix');
-    // #endregion
     const ydoc = new Y.Doc();
     const yshapes = ydoc.getMap('shapes');
     setYjsDocument(ydoc);
@@ -119,9 +115,6 @@ export default function useMultiplayer(documentName) {
       const g = gen;
       const cleanup = () => {
         if (g !== mountGen.current) return;
-        // #region agent log
-        agentLog('useMultiplayer.js:unmount', 'multiplayer unmount', { documentName: documentName || 'default-room' }, 'H7', 'post-fix');
-        // #endregion
         unsubscribeZustand();
         newUndoManager.destroy();
         try {

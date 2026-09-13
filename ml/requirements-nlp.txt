@@ -1,0 +1,10 @@
+# NLP fine-tuning dependencies
+# Reuses torch==2.2.2 already in requirements.txt — no duplication.
+# Install with: pip install -r ml/requirements-nlp.txt
+
+transformers>=4.40.0
+datasets>=2.19.0
+sentencepiece>=0.2.0
+sacrebleu>=2.3.0
+evaluate>=0.4.0
+accelerate>=0.26.0

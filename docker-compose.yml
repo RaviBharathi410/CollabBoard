@@ -1,0 +1,90 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node server.js
+    ports:
+      - "3001:3001"   # Express Backend API
+      - "1234:1234"   # Hocuspocus WebSocket multiplayer
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      # Override so Express resolves inference via compose service name, not localhost
+      - INFERENCE_API_URL=http://inference:8000
+    volumes:
+      - feedback_data:/app/ml/datasets/feedback
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  inference:
+    build:
+      context: .
+      dockerfile: inference-api/Dockerfile
+    ports:
+      - "8000:8000"   # FastAPI inference API
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - nlp_model:/app/ml/exports/nlp_model  # receives trained weights from training service
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, json, sys; data = json.load(urllib.request.urlopen('http://localhost:8000/health')); sys.exit(0 if (data.get('nlp_model_loaded') or data.get('model_loaded')) else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: npm run preview -- --host 0.0.0.0 --port 4173
+    ports:
+      - "5173:4173"   # Map standard client dev port (5173) to container (4173)
+    env_file:
+      - .env
+    depends_on:
+      backend:
+        condition: service_healthy
+      inference:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4173').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # -----------------------------------------------------------------------
+  # training: one-shot NLP fine-tuning job.
+  # Only runs when explicitly invoked:
+  #   docker compose --profile train up training
+  # Writes fine-tuned weights to the nlp_model volume.
+  # Restart 'inference' after training to pick up the new weights:
+  #   docker compose restart inference
+  # -----------------------------------------------------------------------
+  training:
+    build:
+      context: .
+      dockerfile: ml/Dockerfile.training
+    volumes:
+      - nlp_model:/ml/exports/nlp_model  # writes weights here
+    profiles:
+      - train
+    environment:
+      - HF_HOME=/ml/.hf_cache             # cache HuggingFace model downloads
+
+volumes:
+  feedback_data:
+    name: collabboard_feedback_data
+  nlp_model:
+    name: collabboard_nlp_model           # shared between training and inference

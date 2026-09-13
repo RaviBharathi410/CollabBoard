@@ -1,0 +1,303 @@
+{
+  "structured": [
+    {
+      "id": "drawio_architecture",
+      "filename": "architecture.drawio",
+      "format": "drawio",
+      "description": "Multi-shape mxGraph XML architecture diagram",
+      "expected_nodes": [
+        {
+          "label": "Web Frontend",
+          "type": "rectangle"
+        },
+        {
+          "label": "API Gateway",
+          "type": "rectangle"
+        },
+        {
+          "label": "Postgres DB",
+          "type": "database"
+        },
+        {
+          "label": "Redis Cache",
+          "type": "circle"
+        }
+      ],
+      "expected_edge_count": 3
+    },
+    {
+      "id": "mermaid_auth",
+      "filename": "auth_pipeline.mmd",
+      "format": "mermaid",
+      "description": "Branching Mermaid flowchart with typed node shapes and edge labels",
+      "expected_nodes": [
+        {
+          "label": "Client App",
+          "type": "rectangle"
+        },
+        {
+          "label": "API Gateway",
+          "type": "service"
+        },
+        {
+          "label": "Authorized?",
+          "type": "diamond"
+        },
+        {
+          "label": "Order Service",
+          "type": "service"
+        },
+        {
+          "label": "Order Database",
+          "type": "database"
+        }
+      ],
+      "expected_edge_count": 4
+    },
+    {
+      "id": "svg_pipeline",
+      "filename": "vector_pipeline.svg",
+      "format": "svg",
+      "description": "Vector SVG containing explicit <rect>, <circle>, and <line> tags",
+      "expected_nodes": [
+        {
+          "label": "Client App",
+          "type": "rectangle"
+        },
+        {
+          "label": "Processing API",
+          "type": "rectangle"
+        },
+        {
+          "label": "Worker",
+          "type": "circle"
+        }
+      ],
+      "expected_edge_count": 2
+    }
+  ],
+  "image": [
+    {
+      "id": "clean_line_art_3node",
+      "filename": "clean_line_art_3node.png",
+      "category": "line_art",
+      "description": "Standard 3-node digital line-art pipeline",
+      "expected_nodes": [
+        {
+          "label": "Ingestion",
+          "type": "rectangle"
+        },
+        {
+          "label": "Transformer",
+          "type": "rectangle"
+        },
+        {
+          "label": "DB",
+          "type": "circle"
+        }
+      ],
+      "expected_edge_count": 2
+    },
+    {
+      "id": "clean_line_art_branching",
+      "filename": "clean_line_art_branching.png",
+      "category": "line_art",
+      "description": "Branching 4-node architecture pipeline",
+      "expected_nodes": [
+        {
+          "label": "Gateway",
+          "type": "rectangle"
+        },
+        {
+          "label": "Worker 1",
+          "type": "rectangle"
+        },
+        {
+          "label": "Worker 2",
+          "type": "rectangle"
+        },
+        {
+          "label": "Storage",
+          "type": "circle"
+        }
+      ],
+      "expected_edge_count": 3
+    },
+    {
+      "id": "whiteboard_perspective_skew",
+      "filename": "whiteboard_perspective_skew.png",
+      "category": "perspective_skew",
+      "description": "Whiteboard diagram photographed at 11.5 degree angle tilt",
+      "expected_nodes": [
+        {
+          "label": "Ingestion",
+          "type": "rectangle"
+        },
+        {
+          "label": "Transformer",
+          "type": "rectangle"
+        },
+        {
+          "label": "DB",
+          "type": "circle"
+        }
+      ],
+      "expected_edge_count": 2
+    },
+    {
+      "id": "whiteboard_uneven_lighting",
+      "filename": "whiteboard_uneven_lighting.png",
+      "category": "lighting_glare",
+      "description": "Whiteboard photo with strong illumination/glare gradient",
+      "expected_nodes": [
+        {
+          "label": "Ingestion",
+          "type": "rectangle"
+        },
+        {
+          "label": "Transformer",
+          "type": "rectangle"
+        },
+        {
+          "label": "DB",
+          "type": "circle"
+        }
+      ],
+      "expected_edge_count": 2
+    },
+    {
+      "id": "whiteboard_shadow_smudge",
+      "filename": "whiteboard_shadow_smudge.png",
+      "category": "shadow_and_noise",
+      "description": "Whiteboard photo with cast shadow, sensor noise, and eraser residue",
+      "expected_nodes": [
+        {
+          "label": "Gateway",
+          "type": "rectangle"
+        },
+        {
+          "label": "Worker 1",
+          "type": "rectangle"
+        },
+        {
+          "label": "Worker 2",
+          "type": "rectangle"
+        },
+        {
+          "label": "Storage",
+          "type": "circle"
+        }
+      ],
+      "expected_edge_count": 3
+    },
+    {
+      "id": "whiteboard_handwritten_markers",
+      "filename": "whiteboard_handwritten_markers.png",
+      "category": "handwritten_style",
+      "description": "Hand-drawn marker strokes with irregular boundary shapes",
+      "expected_nodes": [
+        {
+          "label": "Client",
+          "type": "rectangle"
+        },
+        {
+          "label": "Server",
+          "type": "rectangle"
+        },
+        {
+          "label": "DB",
+          "type": "circle"
+        }
+      ],
+      "expected_edge_count": 2
+    },
+    {
+      "id": "architecture_doc_screenshot",
+      "filename": "architecture_doc_screenshot.png",
+      "category": "doc_screenshot",
+      "description": "System architecture screenshot with background grid",
+      "expected_nodes": [
+        {
+          "label": "Auth Service",
+          "type": "rectangle"
+        },
+        {
+          "label": "User Service",
+          "type": "rectangle"
+        },
+        {
+          "label": "Cache",
+          "type": "rectangle"
+        }
+      ],
+      "expected_edge_count": 2
+    },
+    {
+      "id": "state_machine_circular",
+      "filename": "state_machine_circular.png",
+      "category": "state_machine",
+      "description": "3 circular states with directional transition arrows",
+      "expected_nodes": [
+        {
+          "label": "Idle",
+          "type": "circle"
+        },
+        {
+          "label": "Running",
+          "type": "circle"
+        },
+        {
+          "label": "Finished",
+          "type": "circle"
+        }
+      ],
+      "expected_edge_count": 2
+    },
+    {
+      "id": "erd_entity_schema",
+      "filename": "erd_entity_schema.png",
+      "category": "erd",
+      "description": "3 rectangular entity schema boxes with relationship connectors",
+      "expected_nodes": [
+        {
+          "label": "User",
+          "type": "rectangle"
+        },
+        {
+          "label": "Order",
+          "type": "rectangle"
+        },
+        {
+          "label": "Item",
+          "type": "rectangle"
+        }
+      ],
+      "expected_edge_count": 2
+    },
+    {
+      "id": "decision_flowchart",
+      "filename": "decision_flowchart.png",
+      "category": "flowchart",
+      "description": "Branching decision tree with diamond decision node and outcomes",
+      "expected_nodes": [
+        {
+          "label": "Start",
+          "type": "rectangle"
+        },
+        {
+          "label": "Valid?",
+          "type": "diamond"
+        },
+        {
+          "label": "Commit",
+          "type": "rectangle"
+        },
+        {
+          "label": "Reject",
+          "type": "rectangle"
+        }
+      ],
+      "expected_edge_count": 3
+    }
+  ]
+}

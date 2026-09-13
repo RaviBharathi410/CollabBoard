@@ -1,0 +1,10 @@
+<svg width="600" height="300" xmlns="http://www.w3.org/2000/svg">
+  <rect id="svg-n1" x="50" y="60" width="120" height="60" fill="#E8F0FE" stroke="#1A73E8" />
+  <text x="70" y="95">Client App</text>
+  <rect id="svg-n2" x="250" y="60" width="140" height="60" fill="#E8F0FE" stroke="#1A73E8" />
+  <text x="270" y="95">Processing API</text>
+  <circle id="svg-n3" cx="480" cy="90" r="40" fill="#CEEAD6" stroke="#1E8E3E" />
+  <text x="460" y="95">Worker</text>
+  <line id="svg-e1" x1="170" y1="90" x2="250" y2="90" stroke="#5F6368" />
+  <line id="svg-e2" x1="390" y1="90" x2="440" y2="90" stroke="#5F6368" />
+</svg>

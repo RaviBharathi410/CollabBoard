@@ -26,7 +26,7 @@ def load_replay_data(replay_dirs, ratio=0.30):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", required=True, type=str)
-    parser.add_argument("--cfg", required=True, type=str)
+    parser.add_argument("--cfg", required=False, default=None, type=str)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch", type=int, default=16)
     parser.add_argument("--img-sz", type=str, default="512,640,768")

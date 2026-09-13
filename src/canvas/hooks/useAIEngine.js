@@ -1,19 +1,35 @@
 import { useState, useCallback, useRef } from 'react';
-import ELK from 'elkjs/lib/elk.bundled.js';
 import useCanvasStore from './useCanvasStore';
 import { LAYOUT_STRATEGIES, getNodeDimensions, mapNodeShapeType } from './layoutStrategies';
 import { detectInBrowser } from '../../ai/BrowserDetector';
 import { trackAIEvent, AIEvents } from '../../ai/telemetry';
 import { markShapeAiGenerated } from './yjsBridge';
+import { auth } from '../../firebase/config';
 
-const elk = new ELK();
-const INFERENCE_BASE =
-  import.meta.env.VITE_INFERENCE_API_URL ??
-  (import.meta.env.DEV ? 'http://localhost:8000' : '');
-const LEGACY_BASE =
+export async function getAuthHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  try {
+    if (auth.currentUser) {
+      const token = await auth.currentUser.getIdToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  } catch (err) {
+    console.warn('[AI Engine] Failed to get Firebase ID token:', err);
+  }
+  return headers;
+}
+
+let _elkInstance = null;
+async function getElk() {
+  if (_elkInstance) return _elkInstance;
+  const mod = await import('elkjs/lib/elk.bundled.js');
+  const ELK = mod.default || mod;
+  _elkInstance = new ELK();
+  return _elkInstance;
+}
+const API_BASE =
   import.meta.env.VITE_API_URL ??
-  (import.meta.env.DEV ? '' : 'http://localhost:3001');
-const API_BASE = INFERENCE_BASE || LEGACY_BASE;
+  (import.meta.env.DEV ? 'http://localhost:3001' : '');
 const FETCH_TIMEOUT_MS = 30000;
 
 const INITIAL_STATE = {
@@ -171,13 +187,17 @@ export default function useAIEngine(stageRef) {
       setState((s) => ({ ...s, stage: 'layouting', progress: 75 }));
 
       const graph = buildElkGraph(diagram);
+      const elk = await getElk();
       const laid = await elk.layout(graph);
 
       setState((s) => ({ ...s, stage: 'rendering', progress: 88 }));
 
-      const stage = stageRef.current;
-      const scale = stage.scaleX() || 1;
-      const stagePos = { x: stage.x(), y: stage.y() };
+      const stage = stageRef?.current;
+      const scale = (typeof stage?.scaleX === 'function' ? stage.scaleX() : 1) || 1;
+      const stagePos = {
+        x: typeof stage?.x === 'function' ? stage.x() : 0,
+        y: typeof stage?.y === 'function' ? stage.y() : 0,
+      };
 
       let offsetX = (-stagePos.x / scale) + 100;
       let offsetY = (-stagePos.y / scale) + 100;
@@ -189,8 +209,10 @@ export default function useAIEngine(stageRef) {
         const maxY = Math.max(...laid.children.map((n) => n.y + n.height));
         const diagramCenterX = (minX + maxX) / 2;
         const diagramCenterY = (minY + maxY) / 2;
-        const viewCenterX = (-stagePos.x / scale) + stage.width() / scale / 2;
-        const viewCenterY = (-stagePos.y / scale) + stage.height() / scale / 2;
+        const stageW = typeof stage?.width === 'function' ? stage.width() : 1200;
+        const stageH = typeof stage?.height === 'function' ? stage.height() : 800;
+        const viewCenterX = (-stagePos.x / scale) + stageW / scale / 2;
+        const viewCenterY = (-stagePos.y / scale) + stageH / scale / 2;
         offsetX = viewCenterX - diagramCenterX;
         offsetY = viewCenterY - diagramCenterY;
       }
@@ -353,9 +375,10 @@ export default function useAIEngine(stageRef) {
 
         setState((s) => ({ ...s, stage: 'analyzing', progress: 45 }));
 
+        const headers = await getAuthHeaders();
         const res = await fetchWithTimeout(`${API_BASE}/api/enhance`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             imageBase64,
             existingShapes,
@@ -455,9 +478,10 @@ export default function useAIEngine(stageRef) {
       setState((s) => ({ ...s, isProcessing: true, stage: 'analyzing', progress: 65, aiError: null }));
 
       try {
+        const headers = await getAuthHeaders();
         const res = await fetchWithTimeout(`${API_BASE}/api/clarify`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             sessionId: clarification.sessionId,
             nodeId: clarification.nodeId,
@@ -529,12 +553,18 @@ export default function useAIEngine(stageRef) {
       trackAIEvent(AIEvents.ASK_QUESTION, { length: question?.length ?? 0 });
 
       try {
-        const imageBase64 = stageRef.current.toDataURL({ pixelRatio: 0.75 });
+        let imageBase64 = '';
+        if (typeof stageRef?.current?.toDataURL === 'function') {
+          try {
+            imageBase64 = stageRef.current.toDataURL({ pixelRatio: 0.75 });
+          } catch (_) { /* ignore */ }
+        }
         const existingShapes = summarizeShapes(useCanvasStore.getState().shapes);
 
+        const headers = await getAuthHeaders();
         const res = await fetchWithTimeout(`${API_BASE}/api/ask`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             imageBase64,
             existingShapes,
@@ -618,6 +648,71 @@ export default function useAIEngine(stageRef) {
     return enhanceDiagram(lastEnhanceOptions.current);
   }, [enhanceDiagram]);
 
+  /**
+   * chatToDiagram(text, conversationHistory)
+   * Tries the fine-tuned NLP model first via /api/chat-to-diagram.
+   * If the model returns { status: 'fallback' } (parse fail, 503, network error),
+   * falls back silently to the streaming /api/ask LLM path.
+   * This mirrors the enhanceDiagram() ONNX → cloud vision fallback pattern.
+   */
+  const chatToDiagram = useCallback(
+    async (text, conversationHistory = []) => {
+      if (!text?.trim()) return null;
+
+      setState((s) => ({
+        ...s,
+        isAsking: true,
+        askResponse: { answer: '', suggestions: [], streaming: false },
+        aiError: null,
+      }));
+
+      try {
+        const headers = await getAuthHeaders();
+        const nlpRes = await fetchWithTimeout(`${API_BASE}/api/chat-to-diagram`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ text }),
+        });
+
+        const nlpData = await nlpRes.json().catch(() => ({}));
+
+        // NLP model produced a valid diagram — render it on the canvas
+        if (nlpRes.ok && nlpData.status === 'ok' && nlpData.diagram?.nodes?.length) {
+          useAIEngine._lastModelUsed = nlpData.modelUsed || 'flan-t5-fine-tuned';
+
+          setState((s) => ({
+            ...s,
+            isAsking: false,
+            modelUsed: nlpData.modelUsed,
+            askResponse: {
+              answer: `Diagram generated from your description (${nlpData.diagram.nodes.length} nodes).`,
+              suggestions: [],
+              streaming: false,
+            },
+          }));
+
+          // Apply the diagram directly to the canvas
+          await applyDiagramToCanvas(nlpData.diagram);
+          return { rendered: true, diagram: nlpData.diagram };
+        }
+
+        // NLP returned 'fallback' (parse failed / model not loaded) — escalate to LLM ask
+        console.info(
+          '[chatToDiagram] NLP fallback →',
+          nlpData.reason ?? 'unknown',
+          '— escalating to /api/ask'
+        );
+      } catch (err) {
+        console.info('[chatToDiagram] NLP request failed →', err.message, '— escalating to /api/ask');
+      }
+
+      // ---- LLM ask fallback (existing askQuestion logic) --------------------
+      const result = await askQuestion(text, conversationHistory);
+      return { rendered: false, askResult: result };
+    },
+    [applyDiagramToCanvas, askQuestion]
+  );
+
   const dismissError = useCallback(() => {
     setState((s) => ({ ...s, aiError: null }));
   }, []);
@@ -694,16 +789,62 @@ export default function useAIEngine(stageRef) {
     return false;
   }, [stageRef]);
 
+  const submitFeedback = useCallback(async ({ nodeId, correctedLabel, correctedType, imageBase64 = null }) => {
+    const sid = lastEnhanceOptions.current?.sessionId;
+    if (!sid || !nodeId) {
+      console.warn('[AI Engine] submitFeedback called without sessionId or nodeId');
+      return;
+    }
+    trackAIEvent(AIEvents.FEEDBACK_CORRECTION, { nodeId, correctedType });
+    try {
+      const headers = await getAuthHeaders();
+      await fetch(`${API_BASE}/api/feedback`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          action: 'correction',
+          sessionId: sid,
+          nodeId,
+          correctedLabel,
+          correctedType,
+          imageBase64,
+          hasImage: Boolean(imageBase64),
+        }),
+      });
+    } catch (err) {
+      console.warn('[AI Engine] Feedback submission failed:', err.message);
+    }
+  }, []);
+
+  const getSuggestions = useCallback(async (diagram, currentLayout) => {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_BASE}/api/suggest`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ diagram, currentLayout }),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      console.warn('[AI Engine] getSuggestions failed:', err.message);
+      return null;
+    }
+  }, []);
+
   return {
     state,
     enhanceDiagram,
     answerClarification,
     askQuestion,
+    chatToDiagram,
     retryEnhance,
     dismissError,
     clearClarification,
     applyDiagramToCanvas,
     applySuggestion,
+    submitFeedback,
+    getSuggestions,
     isProcessing: state.isProcessing,
     aiError: state.aiError,
   };

@@ -1,56 +1,107 @@
 /* ========================================================================
-   CollabBoard — Global Design System
+   CollabBoard — The Drafting Table Design System
    ======================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
 
-/* ── CSS Custom Properties ─────────────────────────────────────────────── */
+/* ── The Drafting Table Tokens ─────────────────────────────────────────── */
 :root {
-  /* Brand */
-  --color-brand:             #6C63FF;
-  --color-brand-dark:        #5A52D5;
-  --color-brand-light:       #EEEDfe;
-  --color-brand-mid:         #8B85F0;
+  /* Surfaces */
+  --surface-paper:           #F6F5F1;
+  --surface-raised:          #FFFFFF;
+  --surface-overlay:         rgba(246, 245, 241, 0.92);
+  --surface-subtle:          #EDEBE4;
+  --surface-active:          #E2DFD6;
+  
+  /* Ink */
+  --ink:                     #26241F;
+  --ink-muted:               #5C594F;
+  --ink-faint:               #8C887B;
+  --ink-white:               #FFFFFF;
+  
+  /* Lines & Grids */
+  --line:                    #DAD6CC;
+  --line-subtle:             #E8E5DC;
+  --line-strong:             #B8B3A4;
+  
+  /* Accents */
+  --blue:                    #2B5C8F; /* Primary human action & active state (Architectural Blueprint Blue) */
+  --blue-hover:              #204770;
+  --blue-subtle:             #EDF3F8;
+  --blue-active:             #183757;
+  
+  --primary:                 var(--blue);
+  --primary-hover:           var(--blue-hover);
+  --primary-subtle:          var(--blue-subtle);
+  --primary-active:          var(--blue-active);
 
-  /* Backgrounds */
-  --color-bg-primary:        #FFFFFF;
-  --color-bg-secondary:      #F8F8FC;
-  --color-bg-tertiary:       #F0F0F8;
+  /* Aliases for backwards compatibility */
+  --moss:                    var(--blue);
+  --moss-hover:              var(--blue-hover);
+  --moss-subtle:             var(--blue-subtle);
+  --moss-active:             var(--blue-active);
+  --accent-moss:             var(--blue);
+  --accent-blue:             var(--blue);
+  
+  --ochre:                   #9E5826; /* AI tracing accent (WCAG AA >= 4.5:1 on paper) */
+  --ochre-hover:             #86491E;
+  --ochre-subtle:            #FDF6F0;
+  --ochre-translucent:       rgba(158, 88, 38, 0.14);
+  
+  --brick:                   #B23B3B; /* Destructive / error */
+  --brick-subtle:            #FDF2F2;
 
-  /* Text */
-  --color-text-primary:      #1A1A2E;
-  --color-text-secondary:    #4B5563;
-  --color-text-tertiary:     #9CA3AF;
-  --color-text-white:        #FFFFFF;
+  /* Typography */
+  --font-sans:               'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:               'IBM Plex Mono', monospace;
 
-  /* Borders */
-  --color-border:            #E5E7EB;
-  --color-border-light:      #F3F4F6;
+  --text-xs:                 0.8125rem; /* 13px */
+  --text-sm:                 0.9375rem; /* 15px */
+  --text-base:               1.0rem;    /* 16px */
+  --text-md:                 1.125rem;  /* 18px */
+  --text-lg:                 1.5rem;    /* 24px */
+  --text-xl:                 2.0rem;    /* 32px */
 
-  /* CTAs */
-  --color-cta-primary-bg:    #6C63FF;
-  --color-cta-primary-text:  #FFFFFF;
-  --color-cta-secondary-bg:  #FFFFFF;
-  --color-cta-secondary-border: #6C63FF;
-  --color-cta-secondary-text:   #6C63FF;
+  /* Shadows (Tactile paper elevation) */
+  --shadow-sm:               0 1px 2px rgba(38, 36, 31, 0.05);
+  --shadow-md:               0 3px 6px -1px rgba(38, 36, 31, 0.08), 0 2px 4px -1px rgba(38, 36, 31, 0.04);
+  --shadow-lg:               0 8px 16px -2px rgba(38, 36, 31, 0.08), 0 4px 6px -2px rgba(38, 36, 31, 0.03);
 
-  /* Workspace dots */
-  --color-workspace-acme:    #8B85F0;
-  --color-workspace-product: #F87171;
-  --color-workspace-design:  #60A5FA;
-  --color-workspace-eng:     #34D399;
-
-  /* Shadows */
-  --color-shadow:            rgba(108, 99, 255, 0.12);
-  --color-shadow-neutral:    rgba(0, 0, 0, 0.06);
-
-  /* Layout */
+  /* Layout dimensions */
   --page-max-width:          1280px;
-  --navbar-height:           64px;
-  --sidebar-width:           240px;
+  --navbar-height:           56px;
+  --rail-width:              56px;
+  --sidebar-width:           56px;
+
+  /* Backward Compatibility Aliases */
+  --color-brand:             var(--blue);
+  --color-brand-dark:        var(--blue-hover);
+  --color-brand-light:       var(--blue-subtle);
+  --color-brand-mid:         var(--blue);
+
+  --color-bg-primary:        var(--surface-paper);
+  --color-bg-secondary:      var(--surface-subtle);
+  --color-bg-tertiary:       var(--surface-raised);
+
+  --color-text-primary:      var(--ink);
+  --color-text-secondary:    var(--ink-muted);
+  --color-text-tertiary:     var(--ink-faint);
+  --color-text-white:        var(--ink-white);
+
+  --color-border:            var(--line);
+  --color-border-light:      var(--line-subtle);
+
+  --color-cta-primary-bg:    var(--blue);
+  --color-cta-primary-text:  var(--ink-white);
+  --color-cta-secondary-bg:  var(--surface-raised);
+  --color-cta-secondary-border: var(--line-strong);
+  --color-cta-secondary-text:   var(--ink);
+
+  --color-shadow:            rgba(38, 36, 31, 0.08);
+  --color-shadow-neutral:    rgba(38, 36, 31, 0.04);
 }
 
-/* ── Reset ─────────────────────────────────────────────────────────────── */
+/* ── Reset & Accessibility ─────────────────────────────────────────────── */
 *,
 *::before,
 *::after {
@@ -66,13 +117,19 @@ html {
 }
 
 body {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 1rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
   font-weight: 400;
-  line-height: 1.6;
-  color: var(--color-text-primary);
-  background-color: var(--color-bg-primary);
+  line-height: 1.45;
+  color: var(--ink);
+  background-color: var(--surface-paper);
   overflow-x: hidden;
+}
+
+/* Accessible focus ring on all interactive elements */
+:focus-visible {
+  outline: 2px solid var(--moss) !important;
+  outline-offset: 2px !important;
 }
 
 a {
@@ -89,7 +146,7 @@ button {
   background: none;
 }
 
-input {
+input, textarea, select {
   font-family: inherit;
   outline: none;
 }
@@ -103,119 +160,178 @@ img, svg {
   max-width: 100%;
 }
 
-/* ── Utility Classes ───────────────────────────────────────────────────── */
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Container ─────────────────────────────────────────────────────────── */
 .container {
   width: 100%;
   max-width: var(--page-max-width);
   margin: 0 auto;
-  padding: 0 48px;
+  padding: 0 32px;
 }
 
 @media (max-width: 768px) {
   .container {
-    padding: 0 24px;
+    padding: 0 16px;
   }
 }
 
-/* ── Button Styles ─────────────────────────────────────────────────────── */
+/* ── Buttons (Tactile Drafting Style) ─────────────────────────────────── */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-weight: 600;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: var(--text-sm);
+  border-radius: 4px;
+  padding: 8px 16px;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
   white-space: nowrap;
+  user-select: none;
 }
 
 .btn-primary {
-  background: var(--color-cta-primary-bg);
-  color: var(--color-cta-primary-text);
-  padding: 10px 24px;
-  font-size: 0.9375rem;
+  background: var(--moss);
+  color: var(--ink-white);
+  border: 1px solid var(--moss);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover {
-  background: var(--color-brand-dark);
-  transform: translateY(-1px);
+  background: var(--moss-hover);
+  border-color: var(--moss-hover);
 }
 
 .btn-primary:active {
-  transform: translateY(0);
+  background: var(--moss-active);
 }
 
 .btn-secondary {
-  background: var(--color-cta-secondary-bg);
-  color: var(--color-cta-secondary-text);
-  border: 1.5px solid var(--color-cta-secondary-border);
-  padding: 10px 24px;
-  font-size: 0.9375rem;
+  background: var(--surface-raised);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-secondary:hover {
-  background: var(--color-brand-light);
-  transform: translateY(-1px);
+  background: var(--surface-subtle);
+  border-color: var(--ink-muted);
 }
 
-.btn-text {
-  color: var(--color-text-secondary);
-  font-weight: 500;
-  font-size: 0.9375rem;
-  padding: 6px 4px;
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-muted);
+  border: 1px solid transparent;
 }
 
-.btn-text:hover {
-  color: var(--color-text-primary);
+.btn-ghost:hover {
+  background: var(--surface-subtle);
+  color: var(--ink);
 }
 
-/* ── Input Styles ──────────────────────────────────────────────────────── */
+.btn-danger {
+  background: var(--brick);
+  color: var(--ink-white);
+  border: 1px solid var(--brick);
+}
+
+.btn-danger:hover {
+  background: #9B2E2E;
+}
+
+/* ── Form Inputs ───────────────────────────────────────────────────────── */
 .input-field {
   width: 100%;
-  height: 44px;
-  padding: 0 14px;
-  font-size: 0.9375rem;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  height: 38px;
+  padding: 0 12px;
+  font-size: var(--text-sm);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .input-field::placeholder {
-  color: var(--color-text-tertiary);
+  color: var(--ink-faint);
 }
 
 .input-field:focus {
-  border-color: var(--color-brand);
-  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+  border-color: var(--moss);
+  box-shadow: 0 0 0 2px var(--moss-subtle);
 }
 
-/* ── Card Styles ───────────────────────────────────────────────────────── */
+/* ── Tactile Paper Card ────────────────────────────────────────────────── */
 .card {
-  background: var(--color-bg-primary);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(108,99,255,0.08);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(108,99,255,0.16);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-md);
 }
 
-/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+/* ── Subtle Graph Paper Texture Background ────────────────────────────── */
+.bg-graph-paper {
+  background-color: var(--surface-paper);
+  background-image: 
+    linear-gradient(to right, rgba(218, 214, 204, 0.4) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(218, 214, 204, 0.4) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* ── Monospace Data Badges ─────────────────────────────────────────────── */
+.data-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  background: var(--surface-subtle);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+}
+
+/* ── Scrollbars ────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: var(--line);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-tertiary);
+  background: var(--line-strong);
+}
+
+/* ── Respect prefers-reduced-motion ────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

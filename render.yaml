@@ -1,0 +1,46 @@
+services:
+  # ── Backend: Express API + Hocuspocus Multiplayer WebSocket Server ──
+  - type: web
+    name: collabboard-backend
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm run server
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: HOCUSPOCUS_PORT
+        value: 1234
+      - key: NODE_ENV
+        value: production
+      - key: ALLOW_UNAUTHENTICATED
+        value: "false"
+      - key: ALLOWED_ORIGINS
+        sync: false # Set to your deployed Vercel domain: https://your-collabboard.vercel.app
+      - key: INFERENCE_API_URL
+        sync: false # Set to your deployed inference URL: https://collabboard-inference.onrender.com
+      - key: OPENAI_API_KEY
+        sync: false # OpenAI API Key (sk-...)
+      - key: GEMINI_API_KEY
+        sync: false # Gemini API Key (optional fallback)
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false # JSON stringified service account credentials
+
+  # ── Inference Microservice: FastAPI NLP & Diagram Import Service ──
+  - type: web
+    name: collabboard-inference
+    runtime: docker
+    dockerfilePath: ./inference-api/Dockerfile
+    dockerContext: .
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: NLP_MODEL_PATH
+        value: google/flan-t5-small
+      - key: PYTHONUNBUFFERED
+        value: "1"

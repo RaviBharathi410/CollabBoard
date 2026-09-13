@@ -2,26 +2,62 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(resourceData) {
+      return isAuthenticated() && resourceData.ownerId == request.auth.uid;
+    }
+
+    function isEditor(resourceData) {
+      return isAuthenticated() && (
+        isOwner(resourceData) ||
+        (request.auth.token.email != null &&
+         resourceData.editors != null &&
+         request.auth.token.email in resourceData.editors)
+      );
+    }
+
+    function isViewer(resourceData) {
+      return isAuthenticated() && (
+        isEditor(resourceData) ||
+        (request.auth.token.email != null &&
+         resourceData.viewers != null &&
+         request.auth.token.email in resourceData.viewers) ||
+        (request.auth.token.email != null &&
+         resourceData.sharedEmails != null &&
+         request.auth.token.email in resourceData.sharedEmails)
+      );
+    }
+
     match /boards_meta/{boardId} {
-      allow read, update, delete: if request.auth != null
-        && resource.data.ownerId == request.auth.uid;
-      allow create: if request.auth != null
+      // 1. Read: Allowed for Owner, Editors, and Viewers
+      allow read: if isViewer(resource.data);
+
+      // 2. Create: Caller must be authenticated and set themselves as owner
+      allow create: if isAuthenticated()
         && request.resource.data.ownerId == request.auth.uid;
+
+      // 3. Update:
+      // - Owner can update any fields (including title, sharing list, and roles)
+      // - Editor can only update title / timestamp, CANNOT change ownerId or escalate/modify permissions
+      // - Viewer CANNOT update anything (readOnly enforced server-side)
+      allow update: if isOwner(resource.data) || (
+        isEditor(resource.data) &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        request.resource.data.sharedWith == resource.data.sharedWith &&
+        request.resource.data.editors == resource.data.editors &&
+        request.resource.data.viewers == resource.data.viewers
+      );
+
+      // 4. Delete: Strictly restricted to document owner
+      allow delete: if isOwner(resource.data);
     }
 
     // Yjs canvas binary state — server Admin SDK only
     match /boards/{boardId} {
       allow read, write: if false;
-
-      match /aiFeedback/{feedbackId} {
-        allow create: if request.auth != null;
-        allow read: if request.auth.uid == resource.data.ownerId;
-      }
-    }
-
-    match /aiSessions/{sessionId} {
-      allow read, write: if request.auth != null
-        && resource.data.userId == request.auth.uid;
     }
   }
 }

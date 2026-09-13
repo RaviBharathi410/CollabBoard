@@ -6,7 +6,7 @@ import { VISION_SYSTEM_PROMPT, buildVisionUserPrompt, ASK_SYSTEM_PROMPT } from '
 import { parseDiagramJson } from './schema.js';
 
 const PRIMARY_MODEL = process.env.PRIMARY_MODEL || 'gpt-4o';
-const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'gemini-2.0-flash';
+const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'gemini-3.6-flash';
 const MAX_TOKENS = parseInt(process.env.MAX_TOKENS || '2048', 10);
 
 let _openai = null;
@@ -116,13 +116,58 @@ async function callGeminiVision(imageBase64, context) {
   return { parsed, modelUsed: FALLBACK_MODEL, rawText: text };
 }
 
+const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD || '0.85');
+
 export async function analyzeDiagramVision(imageBase64, context) {
   const start = Date.now();
+  const inferenceUrl = (process.env.INFERENCE_API_URL || 'http://localhost:8000') + '/detect';
 
+  // 1. Try Local ONNX Inference Server first
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 seconds timeout
+
+    const res = await fetch(inferenceUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64,
+        sessionId: context?.sessionId,
+        existingShapes: context?.existingShapes,
+        diagramTypeHint: context?.diagramTypeHint,
+        instruction: context?.instruction,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.diagram) {
+        const conf = data.diagram.confidence;
+        if (conf >= CONFIDENCE_THRESHOLD) {
+          console.log(`[AI Pipeline] Local ONNX success (confidence: ${conf.toFixed(4)})`);
+          return {
+            parsed: data.diagram,
+            modelUsed: data.modelUsed || 'local-onnx-int8',
+            processingMs: Date.now() - start,
+          };
+        } else {
+          console.warn(`[AI Pipeline] Local ONNX confidence low (${conf.toFixed(4)} < ${CONFIDENCE_THRESHOLD}). Falling back to LLMs.`);
+        }
+      }
+    } else {
+      console.warn(`[AI Pipeline] Local ONNX returned non-200 status: ${res.status}`);
+    }
+  } catch (err) {
+    console.warn(`[AI Pipeline] Local ONNX connection failed or timed out: ${err.message}. Falling back to LLMs.`);
+  }
+
+  // 2. Fallback to LLM pipeline (GPT-4o -> Gemini)
   try {
     const result = await pRetry(() => callOpenAIVision(imageBase64, context), { retries: 1 });
 
-    if (result.parsed.confidence < 0.5) {
+    if (result.parsed.confidence < CONFIDENCE_THRESHOLD) {
       throw new Error('LOW_CONFIDENCE_PRIMARY');
     }
 

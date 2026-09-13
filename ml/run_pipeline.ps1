@@ -4,7 +4,15 @@
 $ErrorActionPreference = "Stop"
 
 # Activate & path configurations
-$VENV_PYTHON = "D:\Projects\CollabBoard\.venv\Scripts\python.exe"
+$VENV_PYTHON = Join-Path $PSScriptRoot "..\.venv\Scripts\python.exe"
+if (-not (Test-Path $VENV_PYTHON)) {
+    $cmd = Get-Command python -ErrorAction SilentlyContinue
+    if ($cmd) {
+        $VENV_PYTHON = $cmd.Source
+    } else {
+        $VENV_PYTHON = "python"
+    }
+}
 
 # ------------------------------------------------------------
 # 0️⃣ Install dependencies
@@ -30,7 +38,6 @@ if (Test-Path $STAGE1_WEIGHTS) {
 
     & $VENV_PYTHON ml/scripts/train_detection.py `
         --data ml/datasets/openimages/dataset.yaml `
-        --cfg cfg/openimages.yaml `
         --epochs 45 `
         --batch 4 `
         --img-sz 512,512,512 `
@@ -49,14 +56,13 @@ if (Test-Path $STAGE1_WEIGHTS) {
 $SKIP_STAGE2 = $true
 if (-not $SKIP_STAGE2) {
     Write-Host "`n=== Stage 2 - Synthetic Diagram Generator (15 epochs) ===`n"
-    & $VENV_PYTHON ml/synthetic/generate_synthetic.py `
+    & $VENV_PYTHON ml/scripts/generate_synthetic.py `
         --output_dir ml/datasets/synthetic `
         --curriculum_cfg ml/synthetic/curriculum.yaml `
         --total_samples 8000
     & $VENV_PYTHON ml/scripts/dataset_quality.py ml/datasets/synthetic
     & $VENV_PYTHON ml/scripts/train_detection.py `
         --data ml/datasets/synthetic/dataset.yaml `
-        --cfg cfg/synthetic.yaml `
         --epochs 15 `
         --batch 4 `
         --img-sz 512,512,512 `
@@ -81,7 +87,6 @@ if (-not (Test-Path ml/datasets/diagramnet_src)) {
 
 & $VENV_PYTHON ml/scripts/train_detection.py `
     --data ml/datasets/diagramnet/dataset.yaml `
-    --cfg cfg/diagramnet.yaml `
     --epochs 12 `
     --batch 4 `
     --img-sz 512,512,512 `
@@ -108,7 +113,6 @@ Write-Host "`n=== Stage 4 - AI2D (10 epochs) ===`n"
 
 & $VENV_PYTHON ml/scripts/train_detection.py `
     --data ml/datasets/ai2d/dataset.yaml `
-    --cfg cfg/ai2d.yaml `
     --epochs 10 `
     --batch 4 `
     --img-sz 512,512,512 `
@@ -133,7 +137,6 @@ if (-not (Test-Path ml/datasets/rico_src)) {
 
 & $VENV_PYTHON ml/scripts/train_detection.py `
     --data ml/datasets/rico/dataset.yaml `
-    --cfg cfg/rico.yaml `
     --epochs 8 `
     --batch 4 `
     --img-sz 512,512,512 `
@@ -159,7 +162,6 @@ if (-not (Test-Path ml/datasets/user_sketches_raw)) {
 
 & $VENV_PYTHON ml/scripts/train_detection.py `
     --data ml/datasets/user_sketches/dataset.yaml `
-    --cfg cfg/user_sketches.yaml `
     --epochs 5 `
     --batch 4 `
     --img-sz 512,512,512 `

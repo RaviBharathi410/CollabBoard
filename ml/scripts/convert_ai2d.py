@@ -43,6 +43,7 @@ def main():
                 lf.write("0 0.5 0.5 0.2 0.2\n")
     else:
         # Loop through images and annotations
+        from PIL import Image
         img_files = list(raw_images_dir.glob("*.png"))
         for img_path in img_files:
             shutil.copy(img_path, images_dest / img_path.name)
@@ -52,28 +53,40 @@ def main():
             yolo_label_path = labels_dest / f"{img_path.stem}.txt"
             
             if anno_path.exists():
-                with open(anno_path, "r") as f:
+                with open(anno_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
+
+                try:
+                    with Image.open(img_path) as im:
+                        img_w, img_h = im.size
+                except Exception:
+                    img_w, img_h = 800, 600
                 
-                with open(yolo_label_path, "w") as lf:
+                with open(yolo_label_path, "w", encoding="utf-8") as lf:
                     # AI2D elements parsing
                     # Text regions, arrows, etc. mapped to UNIFIED_CLASSES indexes
                     # textBlock -> text_region (index 4)
                     # arrow -> arrow (index 3)
+                    # blobs -> container/rectangle (index 0)
                     for element_type in ["text", "arrows", "blobs"]:
                         elements = data.get(element_type, {})
                         for el_id, el_data in elements.items():
                             cls_idx = 4 if element_type == "text" else (3 if element_type == "arrows" else 0)
-                            # Get bounding box (min/max coords) and normalize
                             box = el_data.get("rectangle", [])
                             if len(box) == 2:
                                 # [[x1, y1], [x2, y2]]
                                 x1, y1 = box[0]
                                 x2, y2 = box[1]
-                                # Convert to relative yolo coordinates (centered x,y, w,h)
-                                # Assuming standard size (or load image size to normalize)
-                                # For a placeholder default:
-                                lf.write(f"{cls_idx} 0.5 0.5 0.2 0.2\n")
+                                min_x, max_x = min(x1, x2), max(x1, x2)
+                                min_y, max_y = min(y1, y2), max(y1, y2)
+                                bw = max_x - min_x
+                                bh = max_y - min_y
+                                if bw > 0 and bh > 0 and img_w > 0 and img_h > 0:
+                                    cx = (min_x + bw / 2.0) / img_w
+                                    cy = (min_y + bh / 2.0) / img_h
+                                    nw = bw / img_w
+                                    nh = bh / img_h
+                                    lf.write(f"{cls_idx} {cx:.4f} {cy:.4f} {nw:.4f} {nh:.4f}\n")
 
     # Generate dataset.yaml
     yaml_content = f"""path: {dest.resolve().as_posix()}

@@ -1,0 +1,89 @@
+{
+  "timestamp": "2026-09-13T17:31:03.327464",
+  "structured_benchmark": {
+    "tests": [
+      {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "label_accuracy": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "detected_nodes": 4,
+        "expected_nodes": 4,
+        "detected_edges": 3,
+        "expected_edges": 3,
+        "test_id": "drawio_architecture",
+        "format": "drawio",
+        "confidence_claim": "100% Parsed (Exact)"
+      },
+      {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "label_accuracy": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "detected_nodes": 5,
+        "expected_nodes": 5,
+        "detected_edges": 4,
+        "expected_edges": 4,
+        "test_id": "mermaid_auth",
+        "format": "mermaid",
+        "confidence_claim": "100% Parsed (Exact)"
+      },
+      {
+        "node_precision": 1.0,
+        "node_recall": 1.0,
+        "label_accuracy": 1.0,
+        "edge_precision": 1.0,
+        "edge_recall": 1.0,
+        "detected_nodes": 3,
+        "expected_nodes": 3,
+        "detected_edges": 2,
+        "expected_edges": 2,
+        "test_id": "svg_pipeline",
+        "format": "svg",
+        "confidence_claim": "100% Parsed (Exact)"
+      }
+    ],
+    "mean_node_precision": 1.0,
+    "mean_node_recall": 1.0,
+    "mean_edge_precision": 1.0,
+    "fidelity": "100% Deterministic Parsing"
+  },
+  "image_benchmark": {
+    "tests": [
+      {
+        "node_precision": 1.0,
+        "node_recall": 0.0,
+        "label_accuracy": 0.0,
+        "edge_precision": 0.0,
+        "edge_recall": 0.0,
+        "detected_nodes": 0,
+        "expected_nodes": 3,
+        "detected_edges": 0,
+        "expected_edges": 2,
+        "test_id": "whiteboard_clean_photo",
+        "format": "image",
+        "confidence_claim": "80.0% Inferred/Detected"
+      },
+      {
+        "node_precision": 1.0,
+        "node_recall": 0.0,
+        "label_accuracy": 0.0,
+        "edge_precision": 0.0,
+        "edge_recall": 0.0,
+        "detected_nodes": 0,
+        "expected_nodes": 3,
+        "detected_edges": 0,
+        "expected_edges": 2,
+        "test_id": "whiteboard_skewed_photo",
+        "format": "image",
+        "confidence_claim": "80.0% Inferred/Detected"
+      }
+    ],
+    "mean_node_precision": 1.0,
+    "mean_node_recall": 0.0,
+    "mean_edge_precision": 0.0,
+    "fidelity": "Probabilistic Vision & OCR Inference"
+  }
+}

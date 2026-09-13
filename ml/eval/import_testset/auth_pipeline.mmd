@@ -1,0 +1,5 @@
+graph TD
+  client[Client App] -->|Request| gateway(API Gateway)
+  gateway --> auth{Authorized?}
+  auth -->|Yes| service([Order Service])
+  service --> db[(Order Database)]

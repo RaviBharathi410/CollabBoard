@@ -19,7 +19,7 @@ def collect_uncertain_samples(feedback_dir: Path, model_log_dir: Path, output_di
         with open(fb_file, encoding="utf-8") as f:
             for line in f:
                 record = json.loads(line)
-                if record["action"] in ["relabel", "retype", "delete"] and record.get("hasImage"):
+                if record["action"] in ["relabel", "retype", "delete", "correction"] and record.get("hasImage"):
                     selected.append(
                         {
                             "source": "user_correction",

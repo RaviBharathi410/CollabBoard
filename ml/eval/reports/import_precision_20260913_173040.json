@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-09-13T17:30:40.299320",
+  "structured_benchmark": {
+    "tests": [],
+    "mean_node_precision": 0.0,
+    "mean_node_recall": 0.0,
+    "mean_edge_precision": 0.0,
+    "fidelity": "100% Deterministic Parsing"
+  },
+  "image_benchmark": {
+    "tests": [],
+    "mean_node_precision": 0.0,
+    "mean_node_recall": 0.0,
+    "mean_edge_precision": 0.0,
+    "fidelity": "Probabilistic Vision & OCR Inference"
+  }
+}

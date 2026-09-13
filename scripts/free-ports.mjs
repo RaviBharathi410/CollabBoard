@@ -3,7 +3,7 @@
  */
 import { execSync } from 'child_process';
 
-const PORTS = [3001, 1234];
+const PORTS = [3001, 1234, 5173, 5174, 5175];
 
 function killPort(port) {
   try {

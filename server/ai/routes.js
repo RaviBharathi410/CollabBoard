@@ -1,5 +1,8 @@
 import NodeCache from 'node-cache';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
+import admin from 'firebase-admin';
 import {
   analyzeDiagramVision,
   estimateImageTokens,
@@ -13,8 +16,11 @@ import {
 import { parseDiagramJson, AskResponseSchema } from './schema.js';
 import { ASK_SYSTEM_PROMPT } from './prompts.js';
 import { getLayoutVariations } from './suggest.js';
+import { chatToDiagramHandler } from './chatToDiagram.js';
+import { getRecentAIRequests, computeAIStatsSummary } from './requestLogger.js';
+import { aiRateLimiter } from './rateLimiter.js';
 
-const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD || '0.75');
+const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD || '0.85');
 const sessionCache = new NodeCache({ stdTTL: 600, checkperiod: 120 });
 
 const ClarifyBodySchema = z.object({
@@ -71,6 +77,33 @@ function checkAIConfigured(res) {
   return true;
 }
 
+export const requireAuth = async (req, res, next) => {
+  if (process.env.ALLOW_UNAUTHENTICATED === 'true' && process.env.NODE_ENV !== 'production') {
+    console.warn(`[SECURITY WARNING] Bypassing Firebase ID token verification because ALLOW_UNAUTHENTICATED is set to true (NODE_ENV: ${process.env.NODE_ENV || 'development'})`);
+    return next();
+  }
+
+  if (admin.apps.length === 0) {
+    console.error('[SECURITY ERROR] Firebase Admin SDK is not initialized. Request blocked (401). Set ALLOW_UNAUTHENTICATED=true in dev mode to bypass.');
+    return res.status(401).json({ error: 'Unauthorized: Firebase config missing or service account not loaded' });
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: No token provided' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (err) {
+    console.error(`[SECURITY ERROR] ID Token verification failed: ${err.message}`);
+    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+};
+
 export function mountAIRoutes(app) {
   app.get('/api/health', (_req, res) => {
     const models = getModelAvailability();
@@ -82,7 +115,7 @@ export function mountAIRoutes(app) {
     });
   });
 
-  app.post('/api/enhance', async (req, res) => {
+  app.post('/api/enhance', requireAuth, aiRateLimiter, async (req, res) => {
     const start = Date.now();
     try {
       if (!checkAIConfigured(res)) return;
@@ -106,6 +139,7 @@ export function mountAIRoutes(app) {
           diagramTypeHint,
           instruction,
           existingShapes,
+          sessionId: sid,
         });
         parsed = result.parsed;
         modelUsed = result.modelUsed;
@@ -147,7 +181,7 @@ export function mountAIRoutes(app) {
     }
   });
 
-  app.post('/api/clarify', async (req, res) => {
+  app.post('/api/clarify', requireAuth, aiRateLimiter, async (req, res) => {
     try {
       const body = ClarifyBodySchema.parse(req.body);
       const cached = sessionCache.get(body.sessionId);
@@ -179,7 +213,7 @@ export function mountAIRoutes(app) {
     }
   });
 
-  app.post('/api/ask', async (req, res) => {
+  app.post('/api/ask', requireAuth, aiRateLimiter, async (req, res) => {
     try {
       if (!checkAIConfigured(res)) return;
 
@@ -282,7 +316,7 @@ export function mountAIRoutes(app) {
     }
   });
 
-  app.post('/api/suggest', (req, res) => {
+  app.post('/api/suggest', requireAuth, (req, res) => {
     try {
       const { diagram, currentLayout } = req.body;
       if (!diagram) return res.status(400).json({ error: 'diagram is required' });
@@ -293,8 +327,47 @@ export function mountAIRoutes(app) {
     }
   });
 
+  // NLP text-to-diagram: POST /api/chat-to-diagram
+  // Proxies to inference-api /nlp-to-diagram, returns { status: 'fallback' } on any failure
+  // so the frontend can silently escalate to the streaming /api/ask LLM path.
+  app.post('/api/chat-to-diagram', requireAuth, aiRateLimiter, chatToDiagramHandler);
+
+  // Observability: GET /api/admin/ai-stats/raw
+  // Returns recent request records from NDJSON log for latency, routing, and error inspection.
+  app.get('/api/admin/ai-stats/raw', requireAuth, async (req, res) => {
+    try {
+      const limit = Math.min(Math.max(parseInt(req.query?.limit, 10) || 50, 1), 500);
+      const requests = await getRecentAIRequests(limit);
+      return res.json({
+        status: 'ok',
+        count: requests.length,
+        requests,
+      });
+    } catch (err) {
+      console.error('[Admin API] Failed to get AI stats:', err);
+      return res.status(500).json({ error: 'Failed to retrieve AI stats' });
+    }
+  });
+
+  // Observability: GET /api/admin/ai-stats/summary
+  // Returns aggregated metrics (local vs fallback %, avg latency, estimated savings, fallback reasons).
+  app.get('/api/admin/ai-stats/summary', requireAuth, async (req, res) => {
+    try {
+      const model = req.query?.model || 'gpt-4o';
+      const records = await getRecentAIRequests(1000);
+      const summary = computeAIStatsSummary(records, model);
+      return res.json({
+        status: 'ok',
+        summary,
+      });
+    } catch (err) {
+      console.error('[Admin API] Failed to compute AI stats summary:', err);
+      return res.status(500).json({ error: 'Failed to compute AI stats summary' });
+    }
+  });
+
   // Backward compatibility with legacy /api/analyze
-  app.post('/api/analyze', async (req, res) => {
+  app.post('/api/analyze', requireAuth, aiRateLimiter, async (req, res) => {
     try {
       if (!checkAIConfigured(res)) return;
       const { imageBase64 } = req.body;
@@ -321,4 +394,85 @@ export function mountAIRoutes(app) {
       return res.status(500).json({ error: 'Failed to parse diagram' });
     }
   });
+
+  const handleFeedback = async (req, res) => {
+    try {
+      const {
+        action,
+        sessionId,
+        nodeId,
+        correctedLabel,
+        correctedType,
+        imageBase64,
+        hasImage,
+        original_prompt,
+        generated_diagram,
+        corrected_diagram,
+      } = req.body;
+
+      if (!action || !sessionId || (!nodeId && !original_prompt)) {
+        return res.status(400).json({
+          error: 'action, sessionId, and either nodeId or original_prompt are required',
+        });
+      }
+
+      const dateStr = new Date().toISOString().split('T')[0];
+
+      // 1. If this is an NLP diagram correction, save to ml/datasets/nlp_diagrams/corrections/
+      let savedNLP = false;
+      if (original_prompt || corrected_diagram) {
+        const nlpDir = path.resolve('ml/datasets/nlp_diagrams/corrections');
+        fs.mkdirSync(nlpDir, { recursive: true });
+        const nlpLogFile = path.join(nlpDir, `${dateStr}_corrections.ndjson`);
+        const nlpRecord = {
+          timestamp: new Date().toISOString(),
+          sessionId,
+          action: action || 'correction',
+          original_prompt,
+          generated_diagram: generated_diagram || null,
+          corrected_diagram: corrected_diagram || null,
+        };
+        fs.appendFileSync(nlpLogFile, JSON.stringify(nlpRecord) + '\n', 'utf8');
+        savedNLP = true;
+        console.log(`[Feedback API] Saved NLP correction for session ${sessionId}`);
+      }
+
+      // 2. Vision/sketch feedback path (when nodeId is provided)
+      let savedImage = false;
+      if (nodeId) {
+        const feedbackDir = path.resolve('ml/datasets/feedback');
+        const imagesDir = path.join(feedbackDir, 'images');
+        fs.mkdirSync(imagesDir, { recursive: true });
+
+        if (imageBase64 && hasImage) {
+          const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+          const imgPath = path.join(imagesDir, `${sessionId}_${nodeId}.png`);
+          fs.writeFileSync(imgPath, buffer);
+          savedImage = true;
+        }
+
+        const logFile = path.join(feedbackDir, `${dateStr}_feedback.ndjson`);
+        const record = {
+          timestamp: new Date().toISOString(),
+          action,
+          sessionId,
+          nodeId,
+          hasImage: savedImage,
+          correctedLabel,
+          correctedType,
+        };
+        fs.appendFileSync(logFile, JSON.stringify(record) + '\n', 'utf8');
+        console.log(`[Feedback API] Saved vision correction for session ${sessionId}, node ${nodeId}`);
+      }
+
+      return res.json({ status: 'ok', savedImage, savedNLP });
+    } catch (err) {
+      console.error('Feedback capture failed:', err);
+      return res.status(500).json({ error: 'Failed to record feedback' });
+    }
+  };
+
+  app.post('/api/feedback', requireAuth, aiRateLimiter, handleFeedback);
+  app.post('/api/ai/feedback', requireAuth, aiRateLimiter, handleFeedback);
 }

@@ -171,7 +171,7 @@ export default function GetStartedPage() {
 
       <style>{`
         .gs-section {
-          padding: 80px 0;
+          padding: 96px 0 80px;
         }
         .gs-container {
           max-width: 960px;
@@ -180,7 +180,8 @@ export default function GetStartedPage() {
         }
         .gs-header {
           text-align: center;
-          margin-bottom: 40px;
+          margin-bottom: 44px;
+          padding-top: 16px;
         }
         .gs-title {
           font-size: 2.5rem;

@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { LayoutGrid } from 'lucide-react';
 
@@ -76,7 +76,8 @@ export default function Navbar({ variant = 'landing' }) {
           z-index: 100;
           background: var(--color-bg-primary);
           border-bottom: 1px solid var(--color-border);
-          height: var(--navbar-height);
+          min-height: 64px;
+          padding: 12px 0;
           display: flex;
           align-items: center;
         }

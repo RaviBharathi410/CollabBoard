@@ -283,9 +283,26 @@ def reconstruct_diagram_graph(
         shape_candidates, ocr_regions, orig_w, orig_h
     )
 
+    # Filter out internal dividers, underlines, and text strokes from arrow candidates
+    clean_arrow_candidates = []
+    for a in arrow_candidates:
+        ab = a.get("box", [0, 0, 0, 0])
+        mid_x = (ab[0] + ab[2]) / 2.0
+        mid_y = (ab[1] + ab[3]) / 2.0
+        inside_box = False
+        for s in shape_candidates:
+            sb = s.get("box", [0, 0, 0, 0])
+            if sb[0] - 4 <= mid_x <= sb[2] + 4 and sb[1] - 4 <= mid_y <= sb[3] + 4:
+                inside_box = True
+                break
+        if not inside_box:
+            length = max(ab[2] - ab[0], ab[3] - ab[1])
+            if length >= 20:
+                clean_arrow_candidates.append(a)
+
     # 3. Match arrows to source and target shape endpoints
     edges = []
-    for i, arrow in enumerate(arrow_candidates):
+    for i, arrow in enumerate(clean_arrow_candidates):
         ax1, ay1, ax2, ay2 = arrow["box"]
         aw = ax2 - ax1
         ah = ay2 - ay1
@@ -302,7 +319,7 @@ def reconstruct_diagram_graph(
         for node in nodes_with_text:
             nx1, ny1, nx2, ny2 = node["box"]
             d = distance_point_to_box(start_pt[0], start_pt[1], nx1, ny1, nx2, ny2)
-            if d < min_src_dist and d < 140.0:
+            if d < min_src_dist and d < 65.0:
                 min_src_dist = d
                 source_id = node["id"]
 
@@ -311,7 +328,7 @@ def reconstruct_diagram_graph(
         for node in nodes_with_text:
             nx1, ny1, nx2, ny2 = node["box"]
             d = distance_point_to_box(end_pt[0], end_pt[1], nx1, ny1, nx2, ny2)
-            if d < min_tgt_dist and d < 140.0:
+            if d < min_tgt_dist and d < 65.0:
                 min_tgt_dist = d
                 target_id = node["id"]
 

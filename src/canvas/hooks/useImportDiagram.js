@@ -219,52 +219,42 @@ export default function useImportDiagram(stageRef) {
     let laidEdges = [];
     let offsetX = 0;
     let offsetY = 0;
+    let scaleFactor = 1.0;
 
     if (hasPositions) {
-      // Pre-compute dynamic content sizes and prevent horizontal collisions
-      const nodesWithDimensions = previewDiagram.nodes.map((n) => {
+      const rawMinX = Math.min(...previewDiagram.nodes.map((n) => n.x));
+      const rawMaxX = Math.max(...previewDiagram.nodes.map((n) => n.x + (n.width || 100)));
+      const rawMinY = Math.min(...previewDiagram.nodes.map((n) => n.y));
+      const rawMaxY = Math.max(...previewDiagram.nodes.map((n) => n.y + (n.height || 50)));
+      const rawW = Math.max(rawMaxX - rawMinX, 100);
+      const rawH = Math.max(rawMaxY - rawMinY, 100);
+
+      // Uniform scaling: scale diagram proportionally to fit canvas viewport comfortably,
+      // preserving authentic 2D alignments, columns, rows, and relative spacing exactly as detected.
+      const targetW = Math.min(stageW * 0.88, 1250);
+      const targetH = Math.min(stageH * 0.88, 850);
+      scaleFactor = Math.min(1.4, Math.max(1.0, Math.min(targetW / rawW, targetH / rawH)));
+
+      const diagW = rawW * scaleFactor;
+      const diagH = rawH * scaleFactor;
+      offsetX = viewCenterX - diagW / 2;
+      offsetY = viewCenterY - diagH / 2;
+
+      laidNodes = previewDiagram.nodes.map((n) => {
         const cleanLabel = formatNodeLabel(n);
-        const { w: minW, h: minH } = computeDynamicDimensions(cleanLabel, 150, 60);
-        const actualW = Math.max(n.width || 120, minW);
-        const actualH = Math.max(n.height || 60, minH);
-        return { ...n, x: n.x, y: n.y, formattedLabel: cleanLabel, w: actualW, h: actualH };
+        const w = (n.width || 110) * scaleFactor;
+        const h = (n.height || 55) * scaleFactor;
+        const absX = (n.x - rawMinX) * scaleFactor + offsetX;
+        const absY = (n.y - rawMinY) * scaleFactor + offsetY;
+        return {
+          ...n,
+          formattedLabel: cleanLabel,
+          absX,
+          absY,
+          w,
+          h,
+        };
       });
-
-      // Separation pass: ensure expanded boxes do not overlap neighbors
-      for (let i = 0; i < nodesWithDimensions.length; i++) {
-        for (let j = 0; j < nodesWithDimensions.length; j++) {
-          if (i === j) continue;
-          const n1 = nodesWithDimensions[i];
-          const n2 = nodesWithDimensions[j];
-          const margin = 18;
-          const xOverlap = n1.x < n2.x + n2.w + margin && n1.x + n1.w + margin > n2.x;
-          const yOverlap = n1.y < n2.y + n2.h + margin && n1.y + n1.h + margin > n2.y;
-          if (xOverlap && yOverlap) {
-            if (n2.x >= n1.x) {
-              n2.x = n1.x + n1.w + margin;
-            }
-          }
-        }
-      }
-
-      const minX = Math.min(...nodesWithDimensions.map((n) => n.x));
-      const maxX = Math.max(...nodesWithDimensions.map((n) => n.x + n.w));
-      const minY = Math.min(...nodesWithDimensions.map((n) => n.y));
-      const maxY = Math.max(...nodesWithDimensions.map((n) => n.y + n.h));
-
-      const diagW = maxX - minX;
-      const diagH = maxY - minY;
-      const diagCenterX = minX + diagW / 2;
-      const diagCenterY = minY + diagH / 2;
-
-      offsetX = viewCenterX - diagCenterX;
-      offsetY = viewCenterY - diagCenterY;
-
-      laidNodes = nodesWithDimensions.map((n) => ({
-        ...n,
-        absX: n.x + offsetX,
-        absY: n.y + offsetY,
-      }));
 
       // Smart closest-anchor routing: connects top/bottom/left/right anchors naturally
       const getBestConnectionPoints = (sNode, tNode) => {
@@ -296,20 +286,26 @@ export default function useImportDiagram(stageRef) {
         return [bestPair[0].x, bestPair[0].y, bestPair[1].x, bestPair[1].y];
       };
 
-      // Edges with waypoints or smart closest-anchor endpoints
-      laidEdges = (previewDiagram.edges || []).map((e) => {
-        let points = [];
-        if (e.points && e.points.length > 0) {
-          points = e.points.flatMap(([px, py]) => [px + offsetX, py + offsetY]);
-        } else {
+      // Edges: ALWAYS route cleanly between source and target box boundary anchors!
+      // This prevents arrows from penetrating into boxes or drawing floating disconnected fragments.
+      laidEdges = (previewDiagram.edges || [])
+        .map((e) => {
           const sNode = laidNodes.find((n) => n.id === e.source);
           const tNode = laidNodes.find((n) => n.id === e.target);
-          if (sNode && tNode) {
-            points = getBestConnectionPoints(sNode, tNode);
+          if (sNode && tNode && sNode !== tNode) {
+            const points = getBestConnectionPoints(sNode, tNode);
+            return { ...e, points };
           }
-        }
-        return { ...e, points };
-      });
+          if (e.points && e.points.length >= 2) {
+            const points = e.points.flatMap(([px, py]) => [
+              (px - rawMinX) * scaleFactor + offsetX,
+              (py - rawMinY) * scaleFactor + offsetY,
+            ]);
+            return { ...e, points };
+          }
+          return null;
+        })
+        .filter(Boolean);
     } else {
       // Need ELK Layout (e.g. Mermaid or Cloud AI Vision without explicit coordinates)
       const elk = await getElk();

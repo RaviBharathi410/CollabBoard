@@ -52,6 +52,17 @@ export default function ContextDrawer({
     setAiQuestion('');
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const tabs = [
@@ -68,40 +79,48 @@ export default function ContextDrawer({
       role="complementary" 
       aria-label="Collaboration and Context Drawer"
     >
-      {/* Drawer Header with Tabs */}
+      {/* Drawer Header with Title Bar, Close/Exit Button & Tabs */}
       <div className="drawer-header">
-        <div className="drawer-tabs" role="tablist" aria-label="Collaboration Tabs">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = currentTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                role="tab"
-                id={`drawer-tab-${tab.id}`}
-                aria-selected={isActive}
-                aria-controls={`drawer-panel-${tab.id}`}
-                className={`drawer-tab-btn ${isActive ? 'active' : ''}`}
-                onClick={() => handleTabClick(tab.id)}
-                title={tab.label}
-              >
-                <Icon size={16} />
-                <span className="tab-text">{tab.label}</span>
-                {tab.count !== undefined && tab.count > 0 && (
-                  <span className="tab-badge">{tab.count}</span>
-                )}
-              </button>
-            );
-          })}
+        <div className="drawer-top-bar">
+          <span className="drawer-header-title">Collaboration & Context</span>
+          <button 
+            type="button" 
+            className="drawer-close-btn" 
+            onClick={onClose} 
+            aria-label="Close Drawer"
+            title="Close sidebar (Esc)"
+          >
+            <X size={15} />
+            <span className="close-text">Exit</span>
+          </button>
         </div>
-        <button 
-          type="button" 
-          className="drawer-close-btn" 
-          onClick={onClose} 
-          aria-label="Close Drawer"
-        >
-          <X size={16} />
-        </button>
+
+        <div className="drawer-tabs-wrapper">
+          <div className="drawer-tabs" role="tablist" aria-label="Collaboration Tabs">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = currentTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  id={`drawer-tab-${tab.id}`}
+                  aria-selected={isActive}
+                  aria-controls={`drawer-panel-${tab.id}`}
+                  className={`drawer-tab-btn ${isActive ? 'active' : ''}`}
+                  onClick={() => handleTabClick(tab.id)}
+                  title={tab.label}
+                >
+                  <Icon size={14} className="tab-icon" />
+                  <span className="tab-text">{tab.label}</span>
+                  {tab.count !== undefined && tab.count > 0 && (
+                    <span className="tab-badge">{tab.count}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Drawer Content Body */}
@@ -330,67 +349,123 @@ export default function ContextDrawer({
           top: var(--navbar-height);
           right: 0;
           bottom: 0;
-          width: 320px;
+          width: 360px;
+          max-width: 100vw;
           background: var(--surface-raised);
           border-left: 1px solid var(--line);
           display: flex;
           flex-direction: column;
           z-index: 35;
-          box-shadow: -2px 0 8px rgba(38, 36, 31, 0.04);
+          box-shadow: -4px 0 16px rgba(38, 36, 31, 0.08);
           font-family: var(--font-sans);
         }
         .drawer-header {
           display: flex;
+          flex-direction: column;
+          border-bottom: 1px solid var(--line);
+          background: var(--surface-raised);
+          flex-shrink: 0;
+        }
+        .drawer-top-bar {
+          display: flex;
           align-items: center;
           justify-content: space-between;
-          border-bottom: 1px solid var(--line);
-          padding: 0 8px;
-          height: 42px;
-          background: var(--surface-subtle);
-        }
-        .drawer-tabs {
-          display: flex;
-          gap: 2px;
-          height: 100%;
-          align-items: flex-end;
-        }
-        .drawer-tab-btn {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 10px;
-          font-size: 12.5px;
-          color: var(--ink-muted);
-          border-radius: 4px 4px 0 0;
-          border-bottom: 2px solid transparent;
-          cursor: pointer;
-        }
-        .drawer-tab-btn:hover {
-          color: var(--ink);
-          background: var(--surface-paper);
-        }
-        .drawer-tab-btn.active {
-          color: var(--moss);
-          font-weight: 500;
+          padding: 8px 12px;
+          height: 40px;
+          border-bottom: 1px solid var(--line-subtle);
           background: var(--surface-raised);
-          border-bottom-color: var(--moss);
         }
-        .tab-badge {
-          font-family: var(--font-mono);
-          font-size: 10px;
-          background: var(--surface-subtle);
-          border: 1px solid var(--line);
-          padding: 0 4px;
-          border-radius: 3px;
+        .drawer-header-title {
+          font-size: 11.5px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: var(--ink-muted);
         }
         .drawer-close-btn {
-          color: var(--ink-faint);
-          padding: 4px;
-          border-radius: 3px;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 4px 10px;
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--ink-muted);
+          background: var(--surface-subtle);
+          border: 1px solid var(--line);
+          border-radius: 5px;
+          cursor: pointer;
+          transition: all 0.15s ease;
         }
         .drawer-close-btn:hover {
           color: var(--ink);
           background: var(--surface-paper);
+          border-color: var(--ink-faint);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+        .close-text {
+          font-weight: 600;
+        }
+        .drawer-tabs-wrapper {
+          background: var(--surface-subtle);
+          padding: 4px 6px;
+        }
+        .drawer-tabs {
+          display: flex;
+          gap: 3px;
+          align-items: center;
+          overflow-x: auto;
+          scrollbar-width: none;
+        }
+        .drawer-tabs::-webkit-scrollbar {
+          display: none;
+        }
+        .drawer-tab-btn {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          padding: 6px 6px;
+          font-size: 11.5px;
+          font-weight: 500;
+          color: var(--ink-muted);
+          background: transparent;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.15s ease;
+        }
+        .drawer-tab-btn:hover {
+          color: var(--ink);
+          background: rgba(38, 36, 31, 0.05);
+        }
+        .drawer-tab-btn.active {
+          color: var(--ink);
+          font-weight: 600;
+          background: var(--surface-raised);
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--line-subtle);
+        }
+        .tab-icon {
+          flex-shrink: 0;
+        }
+        .tab-text {
+          white-space: nowrap;
+        }
+        .tab-badge {
+          font-family: var(--font-mono);
+          font-size: 9.5px;
+          font-weight: 600;
+          background: var(--surface-subtle);
+          border: 1px solid var(--line);
+          padding: 0 4px;
+          border-radius: 3px;
+          line-height: 1.2;
+        }
+        .drawer-tab-btn.active .tab-badge {
+          background: var(--moss-subtle);
+          color: var(--moss);
+          border-color: transparent;
         }
         .drawer-content {
           flex: 1;

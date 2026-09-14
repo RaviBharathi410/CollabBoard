@@ -103,4 +103,17 @@ describe('ContextDrawer Component', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('calls onClose when Escape key is pressed', async () => {
+    const onClose = vi.fn();
+    await act(async () => {
+      root.render(<ContextDrawer isOpen={true} onClose={onClose} />);
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

@@ -15,6 +15,7 @@ export default function useMultiplayer(documentName) {
   const [others, setOthers] = useState([]);
   const [undoManager, setUndoManager] = useState(null);
   const mountGen = useRef(0);
+  const syncTimer = useRef(null);
 
   useEffect(() => {
     const gen = ++mountGen.current;
@@ -27,6 +28,13 @@ export default function useMultiplayer(documentName) {
       url: wsUrl,
       name: documentName || 'default-room',
       document: ydoc,
+      onStatus: ({ status }) => {
+        if (status === 'disconnected') {
+          useCanvasStore.getState().setSyncStatus('offline');
+        } else if (status === 'connected') {
+          useCanvasStore.getState().setSyncStatus('saved');
+        }
+      },
     });
 
     const newAwareness = newProvider.awareness;
@@ -75,6 +83,12 @@ export default function useMultiplayer(documentName) {
       // Only sync if the shapes array actually changed
       if (state.shapes === prevState.shapes) return;
 
+      useCanvasStore.getState().setSyncStatus('syncing');
+      clearTimeout(syncTimer.current);
+      syncTimer.current = setTimeout(() => {
+        useCanvasStore.getState().setSyncStatus('saved');
+      }, 3000);
+
       ydoc.transact(() => {
         // Find adds and updates
         state.shapes.forEach((shape) => {
@@ -115,6 +129,7 @@ export default function useMultiplayer(documentName) {
       const g = gen;
       const cleanup = () => {
         if (g !== mountGen.current) return;
+        clearTimeout(syncTimer.current);
         unsubscribeZustand();
         newUndoManager.destroy();
         useCanvasStore.getState().setUndoManager(null);

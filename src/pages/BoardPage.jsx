@@ -11,6 +11,7 @@ import CanvasStage from '../canvas/CanvasStage';
 import ContextDrawer from '../canvas/components/ContextDrawer';
 import ShareModal from '../components/ShareModal';
 import useAIEngine from '../canvas/hooks/useAIEngine';
+import useCanvasStore from '../canvas/hooks/useCanvasStore';
 
 const BOARD_ID_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -23,6 +24,8 @@ export default function BoardPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
+  const canvasSyncStatus = useCanvasStore((state) => state.syncStatus);
+
   
   const [boardMeta, setBoardMeta] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -185,7 +188,7 @@ export default function BoardPage() {
           currentWorkspace="Core Atelier"
           activeDocumentTitle={boardMeta?.title || 'Untitled Board'}
           collaboratorCount={2}
-          syncStatus={firestoreWarning ? 'offline' : 'saved'}
+          syncStatus={firestoreWarning ? 'offline' : (canvasSyncStatus || 'saved')}
           onOpenSearch={() => setIsSearchOpen(true)}
         />
 

@@ -3,7 +3,8 @@
  */
 import { execSync } from 'child_process';
 
-const PORTS = [3001, 1234, 5173, 5174, 5175, 8000];
+const isAll = process.argv.includes('--all');
+const PORTS = isAll ? [3001, 1234, 5173, 5174, 5175, 8000] : [3001, 1234];
 
 function killPort(port) {
   try {
@@ -29,3 +30,11 @@ function killPort(port) {
 }
 
 for (const port of PORTS) killPort(port);
+
+// Allow brief moment for Windows kernel to release sockets
+try {
+  execSync('powershell -Command "Start-Sleep -Milliseconds 250"', { stdio: 'ignore' });
+} catch {
+  /* ignore */
+}
+

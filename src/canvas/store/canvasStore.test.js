@@ -28,6 +28,15 @@ describe('canvasStore', () => {
       expect(state.undoStack).toEqual([]);
       expect(state.redoStack).toEqual([]);
       expect(state.undoManager).toBeNull();
+      expect(state.syncStatus).toBe('saved');
+    });
+
+    it('updates syncStatus via setSyncStatus', () => {
+      const { setSyncStatus } = useCanvasStore.getState();
+      setSyncStatus('syncing');
+      expect(useCanvasStore.getState().syncStatus).toBe('syncing');
+      setSyncStatus('saved');
+      expect(useCanvasStore.getState().syncStatus).toBe('saved');
     });
 
     it('sets active tool and clears selected shapes', () => {

@@ -23,6 +23,15 @@ function isPortAvailable(port) {
   });
 }
 
+async function waitForPortAvailable(port, retries = 5, delayMs = 300) {
+  for (let i = 0; i < retries; i++) {
+    const available = await isPortAvailable(port);
+    if (available) return true;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return false;
+}
+
 // ── 0. Firebase Initialization ──
 let db = null;
 try {
@@ -43,8 +52,22 @@ try {
 // ── 1. Hocuspocus Multiplayer Server ──
 const HOCUSPOCUS_PORT = parseInt(process.env.HOCUSPOCUS_PORT || '1234', 10);
 
+// Configurable auto-save time gaps (in milliseconds)
+// Default debounce: 15,000ms (15s of idle time after edits before persisting)
+// Default maxDebounce: 60,000ms (60s maximum delay during continuous editing)
+const AUTOSAVE_DEBOUNCE = parseInt(
+  process.env.AUTOSAVE_DEBOUNCE || process.env.AUTOSAVE_DEBOUNCE_MS || '15000',
+  10
+);
+const AUTOSAVE_MAX_DEBOUNCE = parseInt(
+  process.env.AUTOSAVE_MAX_DEBOUNCE || process.env.AUTOSAVE_MAX_DEBOUNCE_MS || '60000',
+  10
+);
+
 const hocuspocusServer = new Server({
   port: HOCUSPOCUS_PORT,
+  debounce: AUTOSAVE_DEBOUNCE,
+  maxDebounce: AUTOSAVE_MAX_DEBOUNCE,
   onConnect(data) {
     console.log(`🔌 Client connected to document: ${data.documentName}`);
   },
@@ -89,7 +112,7 @@ const hocuspocusServer = new Server({
 });
 
 async function startHocuspocus() {
-  const available = await isPortAvailable(HOCUSPOCUS_PORT);
+  const available = await waitForPortAvailable(HOCUSPOCUS_PORT);
   if (!available) {
     console.warn(
       `⚠️ WebSocket port ${HOCUSPOCUS_PORT} is already in use — skipping bind (another server instance is running).`
@@ -99,10 +122,12 @@ async function startHocuspocus() {
   try {
     await hocuspocusServer.listen(HOCUSPOCUS_PORT);
     console.log(`🚀 Hocuspocus WebSocket server running on ws://localhost:${HOCUSPOCUS_PORT}`);
+    console.log(`⏱️ Auto-save debouncing configured: ${AUTOSAVE_DEBOUNCE / 1000}s idle, ${AUTOSAVE_MAX_DEBOUNCE / 1000}s max delay`);
   } catch (err) {
     console.error('❌ Hocuspocus failed to start:', err.message);
   }
 }
+
 
 // ── 2. Express AI Backend (start first so /api/health always works) ──
 const app = express();
@@ -128,7 +153,7 @@ mountAIRoutes(app);
 app.use('/api/import', importRouter);
 
 async function main() {
-  const httpAvailable = await isPortAvailable(PORT);
+  const httpAvailable = await waitForPortAvailable(PORT);
   if (!httpAvailable) {
     console.warn(
       `⚠️ Port ${PORT} is already in use — stop old servers (Ctrl+C / taskkill node) and run "npm run server" again to load latest code.`

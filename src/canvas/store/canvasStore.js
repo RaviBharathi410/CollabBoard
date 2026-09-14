@@ -19,6 +19,10 @@ export const useCanvasStore = create((set, get) => ({
   redoStack: [], // Array of undone shapes arrays
   undoManager: null, // Optional Yjs UndoManager
 
+  // ── Sync Status ──
+  syncStatus: 'saved', // 'saved' | 'syncing' | 'offline'
+  setSyncStatus: (status) => set({ syncStatus: status }),
+
   // ── Tool Actions ──
   setActiveTool: (tool) => set({ activeTool: tool, selectedIds: [] }),
 

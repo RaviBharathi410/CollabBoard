@@ -103,6 +103,55 @@ def test_reconstruct_diagram_graph_with_ocr():
     assert edge["source"] == "n1"
     assert edge["target"] == "n2"
     assert edge["sourceTag"] == "detected"
+    assert "points" in edge
+    assert len(edge["points"]) == 2
+
+def test_reconstruct_callout_suppression():
+    # Verify tutorial callout labels ("Boundary Class", "Control class") are suppressed from becoming standalone shapes
+    detections = [
+        {
+            "class_name": "rectangle",
+            "confidence": 0.90,
+            "box": [50.0, 50.0, 200.0, 150.0],
+            "bbox_normalized": [0.25, 0.25, 0.3, 0.25]
+        }
+    ]
+    ocr_regions = [
+        {
+            "text": "ConsoleWindow",
+            "confidence": 0.95,
+            "bbox": [60.0, 60.0, 180.0, 90.0]
+        },
+        {
+            "text": "Boundary Class",
+            "confidence": 0.90,
+            "bbox": [10.0, 10.0, 80.0, 30.0]
+        },
+        {
+            "text": "Control class",
+            "confidence": 0.90,
+            "bbox": [250.0, 10.0, 320.0, 30.0]
+        },
+        {
+            "text": "The main window of the application",
+            "confidence": 0.88,
+            "bbox": [100.0, 220.0, 300.0, 250.0]
+        }
+    ]
+
+    diagram = reconstruct_diagram_graph(
+        detections=detections,
+        ocr_regions=ocr_regions,
+        orig_w=400,
+        orig_h=300
+    )
+
+    node_labels = [n["label"] for n in diagram["nodes"]]
+    # Callout annotations must NOT be in node labels
+    assert not any("boundary class" in lbl.lower() for lbl in node_labels)
+    assert not any("control class" in lbl.lower() for lbl in node_labels)
+    # Explanatory note is preserved as a note
+    assert any("main window of the application" in lbl.lower() for lbl in node_labels)
 
 def test_import_image_api_endpoint():
     pil_img = create_synthetic_diagram_image()

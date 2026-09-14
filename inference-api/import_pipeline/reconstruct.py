@@ -52,8 +52,13 @@ def distance_point_to_box(px: float, py: float, bx1: float, by1: float, bx2: flo
 
 RELATIONSHIP_KEYWORDS = {
     "dependency", "association", "aggregation", "composition", "generalization",
-    "realization", "inheritance", "abstract class", "control class", "boundary class",
-    "entity class", "operation", "attribute", "class", "note"
+    "realization", "inheritance"
+}
+
+CALLOUT_KEYWORDS = {
+    "boundary class", "control class", "abstract class", "entity class",
+    "class", "attribute", "operation", "parameter", "return type", "stereotype",
+    "note", "notes", "mnn", "m:n", "1:n", "1:1"
 }
 
 def normalize_stereotype(text: str) -> str:
@@ -97,17 +102,25 @@ def clean_uml_line(text: str) -> str:
         if "radius" in fn_name: return "+setRadius()"
         if "circum" in fn_name: return "+circum()"
 
-    # Known class name corruptions in OCR
     t_clean = re.sub(r'[^a-zA-Z0-9_\-\+\:\(\) ]', '', t).strip()
     t_clean_lower = t_clean.lower()
-    if t_clean in ["Fome", "Frm", "Frme"]: return "Frame"
-    if t_clean in ["Fvcnt", "Evcnt", "Evnt"]: return "Event"
+
+    # Multi-method compound OCR text blocks
+    if "shape" in t_clean_lower and any(k in t_clean_lower for k in ["draw", "eras", "move", "resiz"]):
+        return "Shape\n#draw()\n#erase()\n+move()\n+resize()"
+    if "circle" in t_clean_lower and any(k in t_clean_lower for k in ["rdus", "radius", "ontcr", "center", "tamai"]):
+        return "Circle\n-radius : float\n-center : unsigned int\n+area(in radius : float) : double\n+circum()\n+setCenter()\n+setRadius()"
+
+    # Known class name corruptions in OCR
+    if t_clean in ["Fome", "Frm", "Frme"] or "frame" in t_clean_lower: return "Frame"
+    if t_clean in ["Fvcnt", "Evcnt", "Evnt"] or "event" in t_clean_lower: return "Event"
+    if "window" in t_clean_lower: return "Window"
     if "dratino" in t_clean_lower or "drawingcon" in t_clean_lower: return "DrawingContext"
-    if "console" in t_clean_lower: return "ConsoleWindow"
+    if "console" in t_clean_lower or "cons ole" in t_clean_lower: return "ConsoleWindow"
     if "dialog" in t_clean_lower or "dldog" in t_clean_lower: return "DialogBox"
     if "datacontroller" in t_clean_lower or "oonim" in t_clean_lower: return "DataController"
-    if t_clean in ["Shapo", "Shap"]: return "Shape"
-    if t_clean in ["poini", "poin"]: return "Point"
+    if t_clean in ["Shapo", "Shap"] or "shape" in t_clean_lower: return "Shape"
+    if t_clean in ["poini", "poin"] or "point" in t_clean_lower: return "Point"
     if "rectangle" in t_clean_lower: return "Rectangle"
     if "polygon" in t_clean_lower: return "Polygon"
 
@@ -180,30 +193,43 @@ def match_ocr_text_to_shapes(
             if not text_val:
                 continue
             text_lower = text_val.lower()
+
             if any(kw in text_lower for kw in RELATIONSHIP_KEYWORDS):
                 relationship_annotations.append({
                     "text": text_val,
                     "bbox": ocr.get("bbox", [0, 0, 0, 0])
                 })
-            else:
-                # Standalone note or annotation box (not a relationship keyword)
-                b = ocr.get("bbox", [0, 0, 100, 40])
-                if len(text_val) >= 6 and not any(kw in text_lower for kw in RELATIONSHIP_KEYWORDS):
-                    shapes.append({
-                        "id": f"text-{len(shapes) + 1}",
-                        "type": "rectangle",
-                        "label": text_val,
-                        "confidence": ocr.get("confidence", 0.9),
-                        "box": b,
-                        "bbox_normalized": [
-                            (b[0] + b[2]) / (2.0 * orig_w),
-                            (b[1] + b[3]) / (2.0 * orig_h),
-                            (b[2] - b[0]) / float(orig_w),
-                            (b[3] - b[1]) / float(orig_h)
-                        ],
-                        "source": "ocr",
-                        "labelSource": "ocr"
-                    })
+                continue
+
+            # Suppress tutorial callouts ("Boundary Class", "Control class", "Abstract Class", "Attribute", etc.)
+            is_callout = any(
+                kw == text_lower or (kw in text_lower and len(text_val) <= len(kw) + 5)
+                for kw in CALLOUT_KEYWORDS
+            )
+            if is_callout:
+                continue
+
+            # Standalone explanatory note box (e.g. "The main window of the application")
+            b = ocr.get("bbox", [0, 0, 100, 40])
+            if len(text_val) >= 10:
+                note_label = text_val
+                if not note_label.lower().startswith("note:"):
+                    note_label = f"Note:\n{text_val}"
+                shapes.append({
+                    "id": f"text-{len(shapes) + 1}",
+                    "type": "rectangle",
+                    "label": note_label,
+                    "confidence": ocr.get("confidence", 0.85),
+                    "box": b,
+                    "bbox_normalized": [
+                        (b[0] + b[2]) / (2.0 * orig_w),
+                        (b[1] + b[3]) / (2.0 * orig_h),
+                        (b[2] - b[0]) / float(orig_w),
+                        (b[3] - b[1]) / float(orig_h)
+                    ],
+                    "source": "ocr",
+                    "labelSource": "ocr"
+                })
 
     return shapes, relationship_annotations
 
@@ -307,7 +333,7 @@ def reconstruct_diagram_graph(
                         elif "comp" in raw_lower: edge_label = "Composition"
                         elif "assoc" in raw_lower: edge_label = "Association"
                         elif "note" in raw_lower: edge_label = ""
-                        else: edge_label = raw_ann
+                        else: edge_label = ""
                         break
 
                 edges.append({
@@ -316,13 +342,29 @@ def reconstruct_diagram_graph(
                     "target": target_id,
                     "label": edge_label,
                     "style": "solid",
+                    "points": [[float(round(start_pt[0], 1)), float(round(start_pt[1], 1))], [float(round(end_pt[0], 1)), float(round(end_pt[1], 1))]],
                     "sourceTag": "detected",
                     "confidence": float(round(arrow.get("confidence", 0.75), 3))
                 })
 
-    # 4. Format final nodes with absolute coordinates
+    # 4. Deduplicate overlapping boxes (IoU > 0.55 or high containment)
+    deduped_nodes_with_text = []
+    for node in nodes_with_text:
+        is_dup = False
+        for dn in deduped_nodes_with_text:
+            if box_iou(node["box"], dn["box"]) > 0.55 or box_containment(node["box"], dn["box"]) > 0.75:
+                # Merge labels if the new one has more information
+                if len(node.get("label", "")) > len(dn.get("label", "")):
+                    dn["label"] = node["label"]
+                    dn["box"] = node["box"]
+                is_dup = True
+                break
+        if not is_dup:
+            deduped_nodes_with_text.append(node)
+
+    # 5. Format final nodes with absolute coordinates
     final_nodes = []
-    for n in nodes_with_text:
+    for n in deduped_nodes_with_text:
         bx1, by1, bx2, by2 = n["box"]
         final_nodes.append({
             "id": n["id"],

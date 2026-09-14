@@ -156,7 +156,7 @@ def detect_shapes_cv(cv_img: np.ndarray) -> List[Dict[str, Any]]:
                     bot_box = b2 if b1[1] <= b2[1] else b1
                     v_gap = bot_box[1] - (top_box[1] + top_box[3])
 
-                    if x_diff <= 16 and w_diff <= 16 and -8 <= v_gap <= 14:
+                    if x_diff <= 32 and w_diff <= 32 and -12 <= v_gap <= 24:
                         mx1 = min(b1[0], b2[0])
                         my1 = min(b1[1], b2[1])
                         mx2 = max(b1[0] + b1[2], b2[0] + b2[2])

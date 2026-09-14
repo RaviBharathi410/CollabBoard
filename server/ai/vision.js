@@ -6,8 +6,7 @@ import { VISION_SYSTEM_PROMPT, buildVisionUserPrompt, ASK_SYSTEM_PROMPT } from '
 import { parseDiagramJson } from './schema.js';
 
 const PRIMARY_MODEL = process.env.PRIMARY_MODEL || 'gpt-4o';
-const rawFallback = process.env.FALLBACK_MODEL || 'gemini-2.5-flash';
-const FALLBACK_MODEL = rawFallback === 'gemini-3.6-flash' ? 'gemini-2.5-flash' : rawFallback;
+const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'gemini-3.6-flash';
 const MAX_TOKENS = parseInt(process.env.MAX_TOKENS || '2048', 10);
 
 let _openai = null;

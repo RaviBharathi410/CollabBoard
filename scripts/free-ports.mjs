@@ -18,7 +18,7 @@ function killPort(port) {
     }
     for (const pid of pids) {
       try {
-        execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+        execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
         console.log(`Freed port ${port} (PID ${pid})`);
       } catch {
         /* already gone */

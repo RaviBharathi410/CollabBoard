@@ -120,6 +120,11 @@ async function startHocuspocus() {
     return;
   }
   try {
+    if (hocuspocusServer?.httpServer) {
+      hocuspocusServer.httpServer.on('error', (err) => {
+        console.error('❌ Hocuspocus HTTP error:', err.message);
+      });
+    }
     await hocuspocusServer.listen(HOCUSPOCUS_PORT);
     console.log(`🚀 Hocuspocus WebSocket server running on ws://localhost:${HOCUSPOCUS_PORT}`);
     console.log(`⏱️ Auto-save debouncing configured: ${AUTOSAVE_DEBOUNCE / 1000}s idle, ${AUTOSAVE_MAX_DEBOUNCE / 1000}s max delay`);
@@ -127,7 +132,6 @@ async function startHocuspocus() {
     console.error('❌ Hocuspocus failed to start:', err.message);
   }
 }
-
 
 // ── 2. Express AI Backend (start first so /api/health always works) ──
 const app = express();
@@ -178,7 +182,16 @@ async function main() {
   await startHocuspocus();
 }
 
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception in server.js:', err.message, err.stack);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled Rejection in server.js:', reason);
+});
+
 main().catch((err) => {
   console.error('❌ Server startup failed:', err.message);
   process.exit(1);
 });
+

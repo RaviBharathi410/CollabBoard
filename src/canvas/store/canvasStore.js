@@ -166,7 +166,7 @@ export const useCanvasStore = create((set, get) => ({
 
   undo: () => {
     const { undoManager, undoStack, redoStack, shapes } = get();
-    if (undoManager && typeof undoManager.canUndo === 'function' && undoManager.canUndo()) {
+    if (undoManager && (typeof undoManager.canUndo !== 'function' || undoManager.canUndo())) {
       try {
         undoManager.undo();
         return;
@@ -190,7 +190,7 @@ export const useCanvasStore = create((set, get) => ({
 
   redo: () => {
     const { undoManager, undoStack, redoStack, shapes } = get();
-    if (undoManager && typeof undoManager.canRedo === 'function' && undoManager.canRedo()) {
+    if (undoManager && (typeof undoManager.canRedo !== 'function' || undoManager.canRedo())) {
       try {
         undoManager.redo();
         return;

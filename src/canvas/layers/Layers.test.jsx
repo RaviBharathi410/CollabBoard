@@ -214,6 +214,28 @@ describe('Layers & Transform Math', () => {
       });
       expect(shrunk.width).toBe(5);
       expect(shrunk.height).toBe(5);
+
+      // Node width = 0 fallback (prevents group collapse)
+      const zeroNodeFallback = computeTransformedDimensions(rectShape, {
+        scaleX: 1.2,
+        scaleY: 1.2,
+        width: 0,
+        height: 0,
+        x: 50,
+        y: 60,
+      });
+      expect(zeroNodeFallback.width).toBe(120);
+      expect(zeroNodeFallback.height).toBe(96);
+
+      // Negative scale factor (flipped handle drag)
+      const flipped = computeTransformedDimensions(rectShape, {
+        scaleX: -1.5,
+        scaleY: -1.2,
+        x: 50,
+        y: 60,
+      });
+      expect(flipped.width).toBe(150);
+      expect(flipped.height).toBe(96);
     });
 
     it('computes transformed dimensions for circle radius', () => {

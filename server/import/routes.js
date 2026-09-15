@@ -4,6 +4,7 @@ import { parseDrawioDiagram } from './parsers/drawioParser.js';
 import { parseMermaidDiagram } from './parsers/mermaidParser.js';
 import { parseSvgDiagram } from './parsers/svgParser.js';
 import { normalizeDiagram } from './normalize.js';
+import { classifyStructuredDiagram } from './classification/contentTypeClassifier.js';
 import { requireAuth } from '../ai/routes.js';
 import { aiRateLimiter } from '../ai/rateLimiter.js';
 import { analyzeDiagramVision } from '../ai/vision.js';
@@ -139,24 +140,30 @@ importRouter.post('/file', requireAuth, aiRateLimiter, async (req, res) => {
     // 1. Structured draw.io MXGraph XML
     if (detected.format === 'drawio') {
       const raw = parseDrawioDiagram(detected.text);
+      const classification = classifyStructuredDiagram('drawio', detected.text);
       const normalized = normalizeDiagram(raw, 'drawio');
+      if (classification?.type) normalized.type = classification.type;
       return res.json({
         status: 'success',
         format: 'drawio',
         isStructured: true,
         diagram: normalized,
+        classification,
       });
     }
 
     // 2. Structured Mermaid Diagram
     if (detected.format === 'mermaid') {
       const raw = parseMermaidDiagram(detected.text);
+      const classification = classifyStructuredDiagram('mermaid', detected.text);
       const normalized = normalizeDiagram(raw, 'mermaid');
+      if (classification?.type) normalized.type = classification.type;
       return res.json({
         status: 'success',
         format: 'mermaid',
         isStructured: true,
         diagram: normalized,
+        classification,
       });
     }
 
@@ -169,23 +176,28 @@ importRouter.post('/file', requireAuth, aiRateLimiter, async (req, res) => {
         const imgData = `data:image/svg+xml;base64,${b64}`;
         const infResult = await processRasterImage(imgData, { enablePreprocessing, enableHighPrecision, sessionId, engine });
         const normalized = normalizeDiagram(infResult.diagram, 'image');
+        if (infResult.classification?.type) normalized.type = infResult.classification.type;
         return res.json({
           status: 'success',
           format: 'raster_image',
           isStructured: false,
           diagram: normalized,
+          classification: infResult.classification,
           preprocessing: infResult.preprocessing,
           modelUsed: infResult.modelUsed,
           fallbackReason: raw.reason,
         });
       }
 
-      const normalized = normalizeDiagram(raw, 'svg');
+      const rawNormalized = normalizeDiagram(raw, 'svg');
+      const classification = classifyStructuredDiagram('svg', detected.text);
+      if (classification?.type) rawNormalized.type = classification.type;
       return res.json({
         status: 'success',
         format: 'svg',
         isStructured: true,
-        diagram: normalized,
+        diagram: rawNormalized,
+        classification,
       });
     }
 
@@ -194,11 +206,15 @@ importRouter.post('/file', requireAuth, aiRateLimiter, async (req, res) => {
       const imgBase64 = content.startsWith('data:') ? content : `data:${detected.mimeType};base64,${content}`;
       const infResult = await processRasterImage(imgBase64, { enablePreprocessing, enableHighPrecision, sessionId, engine });
       const normalized = normalizeDiagram(infResult.diagram, 'image');
+      if (infResult.classification?.type) {
+        normalized.type = infResult.classification.type;
+      }
       return res.json({
         status: 'success',
         format: 'raster_image',
         isStructured: false,
         diagram: normalized,
+        classification: infResult.classification,
         preprocessing: infResult.preprocessing,
         modelUsed: infResult.modelUsed,
       });

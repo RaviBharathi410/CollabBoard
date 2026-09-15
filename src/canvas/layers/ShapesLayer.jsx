@@ -1,6 +1,7 @@
 import React from 'react';
 import { Layer, Rect, Ellipse, Arrow, Line, Text, Transformer, Group } from 'react-konva';
 import useCanvasStore from '../hooks/useCanvasStore';
+import { getDiagramPlugin } from '../plugins';
 
 export function computeTransformedDimensions(shape, { scaleX = 1, scaleY = 1, x, y, width, height, radiusX, radiusY }) {
   const updates = {
@@ -11,7 +12,7 @@ export function computeTransformedDimensions(shape, { scaleX = 1, scaleY = 1, x,
   const absScaleX = Math.abs(scaleX) || 1;
   const absScaleY = Math.abs(scaleY) || 1;
 
-  if (shape.type === 'rectangle') {
+  if (shape.type === 'rectangle' || shape.type === 'uml_class') {
     const origW = (width !== undefined && width > 0) ? width : (shape.width || 0);
     const origH = (height !== undefined && height > 0) ? height : (shape.height || 0);
     updates.width = Math.round(Math.max(5, origW * absScaleX));
@@ -143,6 +144,37 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
   return (
     <Layer ref={layerRef}>
       {shapes.map((shape) => {
+        // 1. Check if shape explicitly delegates to a diagram plugin
+        const pluginId = shape.pluginType || (shape.type === 'uml_class' ? 'uml-class' : null);
+        const plugin = getDiagramPlugin(pluginId);
+        if (plugin) {
+          if (shape.type === 'arrow' || shape.type === 'connector') {
+            const customEdge = plugin.renderEdge(shape, { commonProps });
+            if (customEdge) return customEdge;
+          } else {
+            const customNode = plugin.renderNode(shape, { commonProps });
+            if (customNode) return customNode;
+          }
+        }
+
+        // 2. Direct UML class fallback
+        if (shape.type === 'uml_class' || shape.subtype === 'class' || shape.subtype === 'interface') {
+          const umlPlugin = getDiagramPlugin('uml-class');
+          if (umlPlugin) {
+            const customNode = umlPlugin.renderNode(shape, { commonProps });
+            if (customNode) return customNode;
+          }
+        }
+
+        // 3. Direct UML connector fallback if edge has relationship or multiplicity metadata
+        if (shape.type === 'arrow' && (shape.subtype || shape.multiplicitySource || shape.multiplicityTarget)) {
+          const umlPlugin = getDiagramPlugin('uml-class');
+          if (umlPlugin) {
+            const customEdge = umlPlugin.renderEdge(shape, { commonProps });
+            if (customEdge) return customEdge;
+          }
+        }
+
         if (shape.type === 'rectangle') {
           return (
             <Group

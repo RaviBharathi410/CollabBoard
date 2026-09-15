@@ -19,9 +19,11 @@ export const useCanvasStore = create((set, get) => ({
   redoStack: [], // Array of undone shapes arrays
   undoManager: null, // Optional Yjs UndoManager
 
-  // ── Sync Status ──
+  // ── Sync & Diagram Domain State ──
   syncStatus: 'saved', // 'saved' | 'syncing' | 'offline'
   setSyncStatus: (status) => set({ syncStatus: status }),
+  diagramType: 'flowchart', // 'flowchart' | 'uml-class' | string
+  setDiagramType: (type) => set({ diagramType: type }),
 
   // ── Tool Actions ──
   setActiveTool: (tool) => set({ activeTool: tool, selectedIds: [] }),

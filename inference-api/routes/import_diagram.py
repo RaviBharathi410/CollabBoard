@@ -13,6 +13,7 @@ from import_pipeline.preprocess import preprocess_diagram_image
 from import_pipeline.ocr import extract_diagram_text
 from import_pipeline.detect_shapes import detect_shapes_and_arrows
 from import_pipeline.reconstruct import reconstruct_diagram_graph
+from import_pipeline.classify_diagram_type import classify_diagram_type
 
 router = APIRouter()
 
@@ -73,21 +74,32 @@ async def import_image(payload: ImportImageRequest):
         # 4. Shape & Arrow Detection: Robust geometric CV pipeline (with contour analysis and compartment merging)
         detections, detector_method = detect_shapes_and_arrows(image, onnx_detector=None)
 
-        # 5. Geometric Reconstruction (matches OCR text boxes to shapes & arrows to endpoints)
+        # 5. Content-Type Classification Pass
+        classification = classify_diagram_type(
+            detected_shapes=detections,
+            ocr_regions=ocr_regions,
+            orig_w=cur_w,
+            orig_h=cur_h
+        )
+        effective_type = payload.diagramTypeHint or classification.get("type", "flowchart")
+
+        # 6. Geometric Reconstruction (matches OCR text boxes to shapes & arrows to endpoints)
         diagram = reconstruct_diagram_graph(
             detections=detections,
             ocr_regions=ocr_regions,
             orig_w=cur_w,
             orig_h=cur_h,
-            diagram_type_hint=payload.diagramTypeHint
+            diagram_type_hint=effective_type
         )
+        diagram["type"] = effective_type
 
-        # 6. Graph Sanitization: Prune phantom edges without inventing artificial orphan edges
+        # 7. Graph Sanitization: Prune phantom edges without inventing artificial orphan edges
         repaired_diagram, healing_telemetry = sanitize_and_heal_graph(diagram, stitch_orphans=False)
 
         return {
             "status": "complete",
             "diagram": repaired_diagram,
+            "classification": classification,
             "detectorMethod": detector_method,
             "preprocessing": prep_metrics,
             "ocrRegionsFound": len(ocr_regions),

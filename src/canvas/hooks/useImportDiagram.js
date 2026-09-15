@@ -377,9 +377,36 @@ export default function useImportDiagram(stageRef) {
 
     const shapesToCommit = [];
 
+    const isUML =
+      previewDiagram.type === 'uml-class' ||
+      previewDiagram.type === 'class_diagram' ||
+      previewDiagram.type === 'class';
+
     // 1. Prepare Nodes and formatted Text shapes
     for (const node of laidNodes) {
       const cleanLabel = node.formattedLabel || formatNodeLabel(node);
+
+      if (isUML && (node.type === 'class' || node.type === 'interface' || node.type === 'rectangle' || !node.type)) {
+        shapesToCommit.push({
+          type: 'uml_class',
+          pluginType: 'uml-class',
+          subtype: node.type === 'interface' ? 'interface' : 'class',
+          x: node.absX,
+          y: node.absY,
+          width: node.w,
+          height: node.h,
+          label: cleanLabel,
+          text: cleanLabel,
+          stereotype: node.stereotype,
+          attributes: node.properties?.attributes || node.fields,
+          methods: node.properties?.operations || node.methods,
+          fill: '#FFFFFF',
+          stroke: '#6C63FF',
+          strokeWidth: 2,
+        });
+        continue;
+      }
+
       const isCircle = node.type === 'circle';
       const isDiamond = node.type === 'diamond';
       const isDb = node.type === 'database';
@@ -444,14 +471,25 @@ export default function useImportDiagram(stageRef) {
     // 2. Prepare Edges (arrows)
     for (const edge of laidEdges) {
       if (edge.points && edge.points.length >= 4) {
+        const isDep = (edge.subtype || edge.label || '').toLowerCase().includes('depend') || edge.style === 'dashed';
         shapesToCommit.push({
           type: 'arrow',
+          subtype: edge.subtype || edge.label || 'association',
+          label: edge.label || '',
+          sourceMultiplicity: edge.multiplicitySource || edge.sourceMultiplicity || '',
+          targetMultiplicity: edge.multiplicityTarget || edge.targetMultiplicity || '',
+          pluginType: isUML ? 'uml-class' : undefined,
           points: edge.points,
           stroke: '#6C63FF',
           strokeWidth: 1.5,
-          dash: edge.style === 'dashed' ? [6, 3] : undefined,
+          dash: isDep ? [6, 3] : undefined,
         });
       }
+    }
+
+    // Update active diagram domain type on canvas store
+    if (typeof store.setDiagramType === 'function') {
+      store.setDiagramType(isUML ? 'uml-class' : (previewDiagram.type || 'flowchart'));
     }
 
     // 3. Atomic commit: single history entry in canvasStore allows single-keystroke undo (Ctrl+Z)

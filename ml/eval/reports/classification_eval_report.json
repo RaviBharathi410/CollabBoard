@@ -1,0 +1,179 @@
+{
+  "benchmark_date": "2026-09-15 19:51:56",
+  "total_cases": 15,
+  "overall_accuracy": 93.33,
+  "raster_accuracy": 91.67,
+  "structured_accuracy": 100.0,
+  "per_class_metrics": {
+    "erd": {
+      "support": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0
+    },
+    "flowchart": {
+      "support": 8,
+      "precision": 0.889,
+      "recall": 1.0,
+      "f1_score": 0.941
+    },
+    "uml-class": {
+      "support": 6,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0
+    }
+  },
+  "cases": [
+    {
+      "id": "uml_class_textbook_primary",
+      "category": "raster",
+      "description": "Textbook UML class diagram with 13 classes, stereotypes <<entity>>, and operations",
+      "expected": "uml-class",
+      "predicted": "uml-class",
+      "confidence": 0.95,
+      "method": "heuristic",
+      "correct": true
+    },
+    {
+      "id": "uml_class_fullpage_scan",
+      "category": "raster",
+      "description": "Full-page scanned class diagram with multiple relationship arrows",
+      "expected": "uml-class",
+      "predicted": "uml-class",
+      "confidence": 0.95,
+      "method": "heuristic",
+      "correct": true
+    },
+    {
+      "id": "uml_class_complex_hierarchy",
+      "category": "raster",
+      "description": "UML class hierarchy with inheritance and dependency associations",
+      "expected": "uml-class",
+      "predicted": "uml-class",
+      "confidence": 0.73,
+      "method": "heuristic",
+      "correct": true
+    },
+    {
+      "id": "uml_class_editor_ground_truth",
+      "category": "raster",
+      "description": "UML diagram with Window, Frame, DataController, and Shape classes",
+      "expected": "uml-class",
+      "predicted": "uml-class",
+      "confidence": 0.75,
+      "method": "heuristic",
+      "correct": true
+    },
+    {
+      "id": "flowchart_decision_branching",
+      "category": "raster",
+      "description": "Process flowchart with decision diamond and conditional branching",
+      "expected": "flowchart",
+      "predicted": "flowchart",
+      "confidence": 0.73,
+      "method": "heuristic",
+      "correct": true
+    },
+    {
+      "id": "flowchart_clean_line_art_3node",
+      "category": "raster",
+      "description": "Digital line-art sequential process flow",
+      "expected": "flowchart",
+      "predicted": "flowchart",
+      "confidence": 0.6,
+      "method": "heuristic_default",
+      "correct": true
+    },
+    {
+      "id": "flowchart_clean_branching",
+      "category": "raster",
+      "description": "Branching process flow with multiple worker pipelines",
+      "expected": "flowchart",
+      "predicted": "flowchart",
+      "confidence": 0.6,
+      "method": "heuristic_default",
+      "correct": true
+    },
+    {
+      "id": "flowchart_whiteboard_markers",
+      "category": "raster",
+      "description": "Hand-drawn whiteboard marker flow diagram",
+      "expected": "flowchart",
+      "predicted": "flowchart",
+      "confidence": 0.6,
+      "method": "heuristic_default",
+      "correct": true
+    },
+    {
+      "id": "flowchart_whiteboard_clean",
+      "category": "raster",
+      "description": "Clean whiteboard system workflow",
+      "expected": "flowchart",
+      "predicted": "flowchart",
+      "confidence": 0.6,
+      "method": "heuristic_default",
+      "correct": true
+    },
+    {
+      "id": "flowchart_whiteboard_skewed",
+      "category": "raster",
+      "description": "Tilted perspective whiteboard diagram",
+      "expected": "flowchart",
+      "predicted": "flowchart",
+      "confidence": 0.6,
+      "method": "heuristic_default",
+      "correct": true
+    },
+    {
+      "id": "erd_entity_schema",
+      "category": "raster",
+      "description": "Entity relationship diagram with entity tables and cardinality",
+      "expected": "erd",
+      "predicted": "flowchart",
+      "confidence": 0.6,
+      "method": "heuristic_default",
+      "correct": false
+    },
+    {
+      "id": "state_machine_circular",
+      "category": "raster",
+      "description": "Circular state transition nodes",
+      "expected": "flowchart",
+      "predicted": "flowchart",
+      "confidence": 0.6,
+      "method": "heuristic_default",
+      "correct": true
+    },
+    {
+      "id": "structured_mermaid_class",
+      "category": "structured",
+      "description": "Mermaid classDiagram syntax",
+      "expected": "uml-class",
+      "predicted": "uml-class",
+      "confidence": 1,
+      "method": "mermaid_syntax",
+      "correct": true
+    },
+    {
+      "id": "structured_mermaid_flowchart",
+      "category": "structured",
+      "description": "Mermaid flowchart with decision diamonds",
+      "expected": "flowchart",
+      "predicted": "flowchart",
+      "confidence": 1,
+      "method": "mermaid_syntax",
+      "correct": true
+    },
+    {
+      "id": "structured_drawio_uml",
+      "category": "structured",
+      "description": "Draw.io mxGraph XML with swimlane UML class style",
+      "expected": "uml-class",
+      "predicted": "uml-class",
+      "confidence": 0.95,
+      "method": "drawio_style_inspection",
+      "correct": true
+    }
+  ]
+}

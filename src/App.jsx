@@ -6,6 +6,7 @@ import AuthPage from './pages/AuthPage';
 import DashboardPage from './pages/DashboardPage';
 import BoardPage from './pages/BoardPage';
 import AIStatsDashboardPage from './pages/AIStatsDashboardPage';
+import UMLVisualVerificationPage from './pages/UMLVisualVerificationPage';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import './styles/globals.css';
@@ -19,6 +20,7 @@ function AnimatedRoutes() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/get-started" element={<GetStartedPage />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/uml-preview" element={<UMLVisualVerificationPage />} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/board/:id" element={<ProtectedRoute><BoardPage /></ProtectedRoute>} />
           <Route path="/admin/ai-stats" element={<ProtectedRoute><AIStatsDashboardPage /></ProtectedRoute>} />

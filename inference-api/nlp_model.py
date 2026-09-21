@@ -50,17 +50,18 @@ def _try_load(model_path: str):
         if is_local:
             print(f"[NLP Model] Loading tokenizer from local path {target_path} ...")
             tok = AutoTokenizer.from_pretrained(target_path)
-            print(f"[NLP Model] Loading model from local path {target_path} ...")
-            mdl = AutoModelForSeq2SeqLM.from_pretrained(target_path)
+            print(f"[NLP Model] Loading model from local path {target_path} (low_cpu_mem_usage=True) ...")
+            mdl = AutoModelForSeq2SeqLM.from_pretrained(target_path, low_cpu_mem_usage=True)
         else:
             # Fallback to Hugging Face Hub if local weights were excluded from git
             if "/" in model_path and not (path / "config.json").exists():
                 hf_identifier = model_path
             else:
                 hf_identifier = os.getenv("HF_MODEL_ID", "google/flan-t5-small")
-            print(f"[NLP Model] Local weights not found at '{model_path}'. Cold-start loading from HuggingFace Hub: '{hf_identifier}' ...")
+            print(f"[NLP Model] Local weights not found at '{model_path}'. Cold-start loading from HuggingFace Hub: '{hf_identifier}' (low_cpu_mem_usage=True) ...")
             tok = AutoTokenizer.from_pretrained(hf_identifier)
-            mdl = AutoModelForSeq2SeqLM.from_pretrained(hf_identifier)
+            mdl = AutoModelForSeq2SeqLM.from_pretrained(hf_identifier, low_cpu_mem_usage=True)
+
 
         mdl.eval()
         print("[NLP Model] Model loaded successfully [OK]")
@@ -216,7 +217,10 @@ def generate_diagram(text: str, diagram_type_hint: Optional[str] = None) -> dict
     Raises RuntimeError if the model is not loaded.
     """
     if not is_loaded():
+        load_nlp_model()
+    if not is_loaded():
         raise RuntimeError("NLP model is not loaded")
+
 
     import torch
 

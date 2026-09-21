@@ -17,20 +17,9 @@ from import_pipeline.classify_diagram_type import classify_diagram_type
 
 router = APIRouter()
 
-# Load detector instance
-_raw_model_path = os.getenv("ONNX_MODEL_PATH", "ml/browser_models/collabboard_int8.onnx")
-MODEL_PATH = _raw_model_path
-if not Path(MODEL_PATH).exists():
-    repo_root = Path(__file__).resolve().parent.parent.parent
-    alt_model_path = repo_root / _raw_model_path
-    if alt_model_path.exists():
-        MODEL_PATH = str(alt_model_path)
+# Reuse singleton detector instance from detect route to avoid duplicate memory allocation
+from routes.detect import detector, MODEL_PATH
 
-try:
-    detector = ONNXDiagramDetector(MODEL_PATH)
-except Exception as e:
-    print(f"[Import Pipeline] Warning: Could not initialize local ONNX detector: {e}")
-    detector = None
 
 class ImportImageRequest(BaseModel):
     imageBase64: str

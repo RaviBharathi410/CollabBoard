@@ -34,10 +34,14 @@ app.include_router(import_diagram.router)
 
 @app.on_event("startup")
 async def startup_event():
-    """Load both models once when the FastAPI process starts."""
-    # NLP model (fine-tuned flan-T5)
-    nlp_model_path = os.getenv("NLP_MODEL_PATH", "ml/exports/nlp_model")
-    nlp_model.load_nlp_model(nlp_model_path)
+    """Optionally preload NLP model if enabled, or allow lazy loading on-demand to stay under 512MB RAM."""
+    preload = os.getenv("PRELOAD_NLP_MODEL", "false").lower() in ("true", "1")
+    if preload:
+        nlp_model_path = os.getenv("NLP_MODEL_PATH", "ml/exports/nlp_model")
+        nlp_model.load_nlp_model(nlp_model_path)
+    else:
+        print("[Startup] Fast boot active: Uvicorn starts immediately and serves health checks with low memory usage.")
+
 
 
 @app.get("/health")

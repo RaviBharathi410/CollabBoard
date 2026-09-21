@@ -127,6 +127,17 @@ describe('Toolbar Component & Keyboard Shortcuts', () => {
       expect(useCanvasStore.getState().activeTool).toBe('circle');
     });
 
+    it('switches tool to diamond on "D"', async () => {
+      await act(async () => {
+        root.render(<Toolbar />);
+      });
+
+      await act(async () => {
+        fireKey('d');
+      });
+      expect(useCanvasStore.getState().activeTool).toBe('diamond');
+    });
+
     it('switches tool to arrow on "A"', async () => {
       await act(async () => {
         root.render(<Toolbar />);

@@ -228,6 +228,7 @@ export default function useAIEngine(stageRef) {
           const cx = node.x + offsetX + node.width / 2;
           const cy = node.y + offsetY + node.height / 2;
           const id = store.addShape({
+            id: node.id,
             type: 'circle',
             x: cx,
             y: cy,
@@ -242,6 +243,7 @@ export default function useAIEngine(stageRef) {
           addedIds.push(id);
         } else {
           const id = store.addShape({
+            id: node.id,
             type: 'rectangle',
             x: node.x + offsetX,
             y: node.y + offsetY,
@@ -290,6 +292,8 @@ export default function useAIEngine(stageRef) {
 
         const id = store.addShape({
           type: 'arrow',
+          source: edgeData?.source || edge.sources?.[0],
+          target: edgeData?.target || edge.targets?.[0],
           points,
           stroke: preview ? '#AFA9EC' : '#6C63FF',
           strokeWidth: 1.5,

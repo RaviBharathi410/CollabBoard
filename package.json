@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "start": "node server.js",
     "dev": "vite",
     "server": "node scripts/free-ports.mjs && node server.js",
     "dev:all": "node scripts/free-ports.mjs --all && concurrently -n server,vite,inference -c blue,green,magenta \"node server.js\" \"npm run dev\" \"npm run dev:inference\"",

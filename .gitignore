@@ -47,6 +47,8 @@ firebase-debug.*.log
 coverage/
 playwright-report/
 test-results/
+.pytest_cache/
+**/.pytest_cache/
 
 # ML Artifacts, Checkpoints & Large Data
 ml/exports/

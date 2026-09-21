@@ -333,5 +333,48 @@ describe('canvasStore', () => {
       redo();
       expect(useCanvasStore.getState().shapes).toHaveLength(3);
     });
+
+    it('updateShapes updates multiple shapes atomically with a single history entry', () => {
+      const { addShapes, updateShapes, undo, redo } = useCanvasStore.getState();
+      const ids = addShapes([
+        { id: 'node-1', type: 'rectangle', x: 10, y: 10 },
+        { id: 'edge-1', type: 'arrow', points: [10, 10, 50, 50] },
+      ]);
+
+      updateShapes([
+        { id: 'node-1', x: 100, y: 100 },
+        { id: 'edge-1', points: [100, 100, 150, 150] },
+      ]);
+
+      const updated = useCanvasStore.getState().shapes;
+      expect(updated.find((s) => s.id === 'node-1').x).toBe(100);
+      expect(updated.find((s) => s.id === 'edge-1').points).toEqual([100, 100, 150, 150]);
+
+      // Single undo should revert both node and edge together
+      undo();
+      const reverted = useCanvasStore.getState().shapes;
+      expect(reverted.find((s) => s.id === 'node-1').x).toBe(10);
+      expect(reverted.find((s) => s.id === 'edge-1').points).toEqual([10, 10, 50, 50]);
+
+      // Redo restores both together
+      redo();
+      const restored = useCanvasStore.getState().shapes;
+      expect(restored.find((s) => s.id === 'node-1').x).toBe(100);
+    });
+
+    it('updateShapesSilent updates shapes in-place without pushing undo history', () => {
+      const { addShape, updateShapesSilent, undo } = useCanvasStore.getState();
+      const id = addShape({ id: 'node-1', type: 'rectangle', x: 20, y: 20 });
+
+      updateShapesSilent([
+        { id: 'node-1', x: 55, y: 65 },
+      ]);
+
+      expect(useCanvasStore.getState().shapes.find((s) => s.id === id).x).toBe(55);
+
+      // Undo should revert all the way back to initial empty state, not x=20
+      undo();
+      expect(useCanvasStore.getState().shapes).toHaveLength(0);
+    });
   });
 });

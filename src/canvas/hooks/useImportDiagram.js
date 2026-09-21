@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import useCanvasStore from '../store/canvasStore';
 import { getAuthHeaders } from './useAIEngine';
+import { routeOrthogonalEdge, orthogonalManualArrow } from '../utils/orthogonalRouter';
 
 const API_BASE =
   import.meta.env.VITE_API_URL ??
@@ -213,6 +214,28 @@ export default function useImportDiagram(stageRef) {
       return { w, h, lines };
     };
 
+    const isUML =
+      previewDiagram.type === 'uml-class' ||
+      previewDiagram.type === 'class_diagram' ||
+      previewDiagram.type === 'class';
+
+    const computeUmlDimensions = (n) => {
+      const cleanLabel = formatNodeLabel(n);
+      const attrs = n.properties?.attributes || n.fields || n.attributes || [];
+      const methods = n.properties?.operations || n.methods || [];
+      const name = n.name || n.label || '';
+      const stereotype = n.stereotype || '';
+      const allLines = [stereotype, name, ...attrs, ...methods, ...(cleanLabel ? cleanLabel.split('\n') : [])].filter(Boolean);
+      const maxLineLen = Math.max(...allLines.map((l) => l.length), 10);
+      const minW = Math.max(180, Math.min(360, Math.round(maxLineLen * 7.6 + 32)));
+      const hasStereo = Boolean(stereotype) || n.type === 'interface';
+      const headerH = hasStereo ? 44 : 32;
+      const attrH = Math.max(26, Math.max(attrs.length, 1) * 17 + 10);
+      const methH = Math.max(26, Math.max(methods.length, 1) * 17 + 16);
+      const minH = headerH + attrH + methH;
+      return { minW, minH, cleanLabel };
+    };
+
     const hasPositions = previewDiagram.nodes.every((n) => typeof n.x === 'number' && typeof n.y === 'number');
 
     let laidNodes = [];
@@ -241,9 +264,27 @@ export default function useImportDiagram(stageRef) {
       offsetY = viewCenterY - diagH / 2;
 
       laidNodes = previewDiagram.nodes.map((n) => {
-        const cleanLabel = formatNodeLabel(n);
-        const w = (n.width || 110) * scaleFactor;
-        const h = (n.height || 55) * scaleFactor;
+        let cleanLabel = formatNodeLabel(n);
+        let requiredW;
+        let requiredH;
+
+        if (isUML && (n.type === 'class' || n.type === 'interface' || n.type === 'rectangle' || !n.type)) {
+          const umlDim = computeUmlDimensions(n);
+          requiredW = umlDim.minW;
+          requiredH = umlDim.minH;
+          cleanLabel = umlDim.cleanLabel;
+        } else {
+          const lines = (cleanLabel || '').split('\n');
+          const maxLineLen = Math.max(...lines.map((l) => l.length), (n.name || '').length, 8);
+          requiredW = Math.max(160, Math.round(maxLineLen * 7.5 + 32));
+          requiredH = Math.max(65, Math.round(lines.length * 18 + 36));
+        }
+
+        const detectedW = (n.width || 120) * scaleFactor;
+        const detectedH = (n.height || 60) * scaleFactor;
+
+        const w = Math.max(detectedW, requiredW);
+        const h = Math.max(detectedH, requiredH);
         const absX = (n.x - rawMinX) * scaleFactor + offsetX;
         const absY = (n.y - rawMinY) * scaleFactor + offsetY;
         return {
@@ -256,51 +297,68 @@ export default function useImportDiagram(stageRef) {
         };
       });
 
-      // Smart closest-anchor routing: connects top/bottom/left/right anchors naturally
-      const getBestConnectionPoints = (sNode, tNode) => {
-        const sAnchors = [
-          { x: sNode.absX + sNode.w / 2, y: sNode.absY }, // top
-          { x: sNode.absX + sNode.w / 2, y: sNode.absY + sNode.h }, // bottom
-          { x: sNode.absX, y: sNode.absY + sNode.h / 2 }, // left
-          { x: sNode.absX + sNode.w, y: sNode.absY + sNode.h / 2 }, // right
-        ];
-        const tAnchors = [
-          { x: tNode.absX + tNode.w / 2, y: tNode.absY }, // top
-          { x: tNode.absX + tNode.w / 2, y: tNode.absY + tNode.h }, // bottom
-          { x: tNode.absX, y: tNode.absY + tNode.h / 2 }, // left
-          { x: tNode.absX + tNode.w, y: tNode.absY + tNode.h / 2 }, // right
-        ];
+      // Separation pass: ensure expanded boxes do not overlap neighbors
+      const sepMargin = 28;
+      for (let iter = 0; iter < 3; iter++) {
+        for (let i = 0; i < laidNodes.length; i++) {
+          for (let j = 0; j < laidNodes.length; j++) {
+            if (i === j) continue;
+            const a = laidNodes[i];
+            const b = laidNodes[j];
+            const aRight = a.absX + a.w;
+            const aBottom = a.absY + a.h;
+            const bRight = b.absX + b.w;
+            const bBottom = b.absY + b.h;
 
-        let bestPair = [sAnchors[3], tAnchors[2]];
-        let minDist = Infinity;
+            const overlapX = a.absX < bRight + sepMargin && aRight + sepMargin > b.absX;
+            const overlapY = a.absY < bBottom + sepMargin && aBottom + sepMargin > b.absY;
 
-        for (const sa of sAnchors) {
-          for (const ta of tAnchors) {
-            const dist = Math.hypot(sa.x - ta.x, sa.y - ta.y);
-            if (dist < minDist) {
-              minDist = dist;
-              bestPair = [sa, ta];
+            if (overlapX && overlapY) {
+              const diffX = (b.absX + b.w / 2) - (a.absX + a.w / 2);
+              const diffY = (b.absY + b.h / 2) - (a.absY + a.h / 2);
+              if (Math.abs(diffX) >= Math.abs(diffY)) {
+                if (diffX >= 0) {
+                  b.absX = aRight + sepMargin;
+                } else {
+                  b.absX = a.absX - b.w - sepMargin;
+                }
+              } else {
+                if (diffY >= 0) {
+                  b.absY = aBottom + sepMargin;
+                } else {
+                  b.absY = a.absY - b.h - sepMargin;
+                }
+              }
             }
           }
         }
-        return [bestPair[0].x, bestPair[0].y, bestPair[1].x, bestPair[1].y];
-      };
+      }
 
-      // Edges: ALWAYS route cleanly between source and target box boundary anchors!
-      // This prevents arrows from penetrating into boxes or drawing floating disconnected fragments.
+      // Edges: ALWAYS route strictly orthogonally with proper channel spacing!
+      // Enforces strictly horizontal and vertical axes with zero diagonal lines.
       laidEdges = (previewDiagram.edges || [])
-        .map((e) => {
+        .map((e, idx) => {
           const sNode = laidNodes.find((n) => n.id === e.source);
           const tNode = laidNodes.find((n) => n.id === e.target);
           if (sNode && tNode && sNode !== tNode) {
-            const points = getBestConnectionPoints(sNode, tNode);
+            const points = routeOrthogonalEdge(sNode, tNode, {
+              edgeIndex: idx,
+              channelSpacing: 16,
+              clearance: 20,
+            });
             return { ...e, points };
           }
-          if (e.points && e.points.length >= 2) {
-            const points = e.points.flatMap(([px, py]) => [
-              (px - rawMinX) * scaleFactor + offsetX,
-              (py - rawMinY) * scaleFactor + offsetY,
-            ]);
+          if (e.points && e.points.length >= 4) {
+            const rawStart = {
+              x: (e.points[0][0] ?? e.points[0]) * scaleFactor + offsetX,
+              y: (e.points[0][1] ?? e.points[1]) * scaleFactor + offsetY,
+            };
+            const nPts = e.points.length;
+            const rawEnd = {
+              x: (e.points[nPts - 1][0] ?? e.points[nPts - 2]) * scaleFactor + offsetX,
+              y: (e.points[nPts - 1][1] ?? e.points[nPts - 1]) * scaleFactor + offsetY,
+            };
+            const points = orthogonalManualArrow(rawStart, rawEnd);
             return { ...e, points };
           }
           return null;
@@ -323,7 +381,16 @@ export default function useImportDiagram(stageRef) {
         },
         children: previewDiagram.nodes.map((n) => {
           const cleanLabel = formatNodeLabel(n);
-          const { w, h } = computeDynamicDimensions(cleanLabel, 160, 65);
+          let w, h;
+          if (isUML && (n.type === 'class' || n.type === 'interface' || n.type === 'rectangle' || !n.type)) {
+            const umlDim = computeUmlDimensions(n);
+            w = umlDim.minW;
+            h = umlDim.minH;
+          } else {
+            const dims = computeDynamicDimensions(cleanLabel, 160, 65);
+            w = dims.w;
+            h = dims.h;
+          }
           return {
             id: n.id,
             width: w,
@@ -377,17 +444,13 @@ export default function useImportDiagram(stageRef) {
 
     const shapesToCommit = [];
 
-    const isUML =
-      previewDiagram.type === 'uml-class' ||
-      previewDiagram.type === 'class_diagram' ||
-      previewDiagram.type === 'class';
-
     // 1. Prepare Nodes and formatted Text shapes
     for (const node of laidNodes) {
       const cleanLabel = node.formattedLabel || formatNodeLabel(node);
 
       if (isUML && (node.type === 'class' || node.type === 'interface' || node.type === 'rectangle' || !node.type)) {
         shapesToCommit.push({
+          id: node.id,
           type: 'uml_class',
           pluginType: 'uml-class',
           subtype: node.type === 'interface' ? 'interface' : 'class',
@@ -395,11 +458,12 @@ export default function useImportDiagram(stageRef) {
           y: node.absY,
           width: node.w,
           height: node.h,
+          name: node.name || (cleanLabel ? cleanLabel.split('\n')[0] : ''),
           label: cleanLabel,
           text: cleanLabel,
           stereotype: node.stereotype,
-          attributes: node.properties?.attributes || node.fields,
-          methods: node.properties?.operations || node.methods,
+          attributes: node.properties?.attributes || node.fields || node.attributes || [],
+          methods: node.properties?.operations || node.methods || [],
           fill: '#FFFFFF',
           stroke: '#6C63FF',
           strokeWidth: 2,
@@ -413,6 +477,7 @@ export default function useImportDiagram(stageRef) {
 
       if (isCircle) {
         shapesToCommit.push({
+          id: node.id,
           type: 'circle',
           x: node.absX + node.w / 2,
           y: node.absY + node.h / 2,
@@ -424,6 +489,7 @@ export default function useImportDiagram(stageRef) {
         });
       } else if (isDiamond) {
         shapesToCommit.push({
+          id: node.id,
           type: 'diamond',
           x: node.absX,
           y: node.absY,
@@ -435,6 +501,7 @@ export default function useImportDiagram(stageRef) {
         });
       } else {
         shapesToCommit.push({
+          id: node.id,
           type: 'rectangle',
           x: node.absX,
           y: node.absY,
@@ -473,7 +540,10 @@ export default function useImportDiagram(stageRef) {
       if (edge.points && edge.points.length >= 4) {
         const isDep = (edge.subtype || edge.label || '').toLowerCase().includes('depend') || edge.style === 'dashed';
         shapesToCommit.push({
+          id: edge.id || `edge-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           type: 'arrow',
+          source: edge.source,
+          target: edge.target,
           subtype: edge.subtype || edge.label || 'association',
           label: edge.label || '',
           sourceMultiplicity: edge.multiplicitySource || edge.sourceMultiplicity || '',

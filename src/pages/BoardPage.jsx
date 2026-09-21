@@ -12,6 +12,7 @@ import ContextDrawer from '../canvas/components/ContextDrawer';
 import ShareModal from '../components/ShareModal';
 import useAIEngine from '../canvas/hooks/useAIEngine';
 import useCanvasStore from '../canvas/hooks/useCanvasStore';
+import { getTemplateById, getTemplateByTitle } from './templates/templateRegistry';
 
 const BOARD_ID_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -58,13 +59,47 @@ export default function BoardPage() {
     state: aiState,
   } = useAIEngine(boardAIStageRef);
 
-  const openLocalBoard = useCallback((boardId, title) => {
+  // Reset canvas store when switching boards or unmounting so leftover shapes never pollute
+  const prevIdRef = useRef(id);
+  useEffect(() => {
+    if (prevIdRef.current !== id) {
+      useCanvasStore.setState({
+        shapes: [],
+        selectedIds: [],
+        undoStack: [],
+        redoStack: [],
+      });
+      prevIdRef.current = id;
+    }
+    return () => {
+      useCanvasStore.setState({
+        shapes: [],
+        selectedIds: [],
+        undoStack: [],
+        redoStack: [],
+      });
+    };
+  }, [id]);
+
+  const openLocalBoard = useCallback((boardId, title, extraState = {}) => {
     setFirestoreWarning(
       'Firestore is running in local memory mode. Drawing works; changes are stored in session.'
     );
     setBoardMeta({ id: boardId, title, ownerId: currentUser?.uid });
     setTitleInput(title);
     setLoading(false);
+
+    const starterShapes = extraState.starterShapes || [];
+    const diagramType = extraState.diagramType || 'flowchart';
+    if (typeof useCanvasStore.getState().setDiagramType === 'function') {
+      useCanvasStore.getState().setDiagramType(diagramType);
+    }
+    if (starterShapes.length > 0) {
+      useCanvasStore.setState({
+        shapes: starterShapes,
+        selectedIds: [],
+      });
+    }
   }, [currentUser?.uid]);
 
   useEffect(() => {
@@ -72,14 +107,36 @@ export default function BoardPage() {
       if (!currentUser || !id) return;
       if (!BOARD_ID_UUID.test(id)) {
         try {
-          const newBoard = await createBoard(currentUser.uid, slugToTitle(id));
-          navigate(`/board/${newBoard.id}`, { replace: true });
+          const rawTitle = slugToTitle(id);
+          const tpl = getTemplateById(id) || getTemplateByTitle(rawTitle);
+          const title = tpl ? tpl.title : rawTitle;
+          const extraMeta = tpl ? {
+            diagramType: tpl.diagramType,
+            starterShapes: tpl.starterShapes,
+          } : {};
+          const newBoard = await createBoard(currentUser.uid, title, extraMeta);
+          navigate(`/board/${newBoard.id}`, {
+            replace: true,
+            state: {
+              title,
+              diagramType: tpl?.diagramType || 'flowchart',
+              starterShapes: tpl?.starterShapes || [],
+            },
+          });
         } catch (err) {
           if (isFirestoreUnavailable(err)) {
+            const rawTitle = slugToTitle(id);
+            const tpl = getTemplateById(id) || getTemplateByTitle(rawTitle);
+            const title = tpl ? tpl.title : rawTitle;
             const localId = crypto.randomUUID();
             navigate(`/board/${localId}`, {
               replace: true,
-              state: { localOnly: true, title: slugToTitle(id) },
+              state: {
+                localOnly: true,
+                title,
+                diagramType: tpl?.diagramType || 'flowchart',
+                starterShapes: tpl?.starterShapes || [],
+              },
             });
             return;
           }
@@ -90,7 +147,7 @@ export default function BoardPage() {
       }
 
       if (location.state?.localOnly) {
-        openLocalBoard(id, location.state.title || 'Untitled Board');
+        openLocalBoard(id, location.state.title || 'Untitled Board', location.state);
         return;
       }
 
@@ -102,9 +159,23 @@ export default function BoardPage() {
         }
         setBoardMeta(meta);
         setTitleInput(meta.title);
+
+        // Seed canvasStore with starterShapes if provided
+        const starterShapes = location.state?.starterShapes || meta.starterShapes || [];
+        const diagramType = location.state?.diagramType || meta.diagramType || 'flowchart';
+        if (typeof useCanvasStore.getState().setDiagramType === 'function') {
+          useCanvasStore.getState().setDiagramType(diagramType);
+        }
+
+        if (starterShapes.length > 0) {
+          useCanvasStore.setState({
+            shapes: starterShapes,
+            selectedIds: [],
+          });
+        }
       } catch (err) {
         if (isFirestoreUnavailable(err)) {
-          openLocalBoard(id, 'Untitled Board');
+          openLocalBoard(id, 'Untitled Board', location.state || {});
           return;
         }
         console.error('Failed to load board meta', err);

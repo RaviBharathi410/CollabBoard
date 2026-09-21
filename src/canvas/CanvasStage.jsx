@@ -15,6 +15,7 @@ import PropertiesPanel from './ui/PropertiesPanel';
 import OutlineMode from './components/OutlineMode';
 import TracingOverlay from './components/TracingOverlay';
 import { Sparkles } from 'lucide-react';
+import { orthogonalManualArrow } from './utils/orthogonalRouter';
 
 export default function CanvasStage({ isOutlineOpen: externalOutlineOpen, onCloseOutline }) {
   const { id } = useParams();
@@ -132,6 +133,7 @@ export default function CanvasStage({ isOutlineOpen: externalOutlineOpen, onClos
         if (key === 'm') setTool('marquee');
         if (key === 'r') setTool('rectangle');
         if (key === 'c') setTool('circle');
+        if (key === 'd') setTool('diamond');
         if (key === 'a') setTool('arrow');
         if (key === 'p') setTool('pencil');
         if (key === 't') setTool('text');
@@ -144,6 +146,7 @@ export default function CanvasStage({ isOutlineOpen: externalOutlineOpen, onClos
   const isDrawing = useRef(false);
   const newShapeId = useRef(null);
   const startPos = useRef({ x: 0, y: 0 });
+  const hasMoved = useRef(false);
 
   const getPointerPos = (stage) => {
     const pointer = stage.getPointerPosition();
@@ -187,22 +190,31 @@ export default function CanvasStage({ isOutlineOpen: externalOutlineOpen, onClos
     if (clickedOnEmpty) clearSelection();
     if (activeTool === 'select' || activeTool === 'hand' || activeTool === 'marquee') return;
 
-    isDrawing.current = true;
     const pos = getPointerPos(stage);
     startPos.current = pos;
+    hasMoved.current = false;
+    isDrawing.current = true;
+    newShapeId.current = null;
 
-    if (activeTool === 'rectangle') {
-      newShapeId.current = addShape({ type: 'rectangle', x: pos.x, y: pos.y, width: 0, height: 0, fill: '#FFFFFF', stroke: '#26241F' });
-    } else if (activeTool === 'circle') {
-      newShapeId.current = addShape({ type: 'circle', x: pos.x, y: pos.y, radiusX: 0, radiusY: 0, fill: '#FFFFFF', stroke: '#26241F' });
-    } else if (activeTool === 'arrow') {
-      newShapeId.current = addShape({ type: 'arrow', x: 0, y: 0, points: [pos.x, pos.y, pos.x, pos.y], stroke: '#26241F' });
-    } else if (activeTool === 'pencil') {
-      newShapeId.current = addShape({ type: 'pencil', x: 0, y: 0, points: [pos.x, pos.y], stroke: '#26241F' });
-    } else if (activeTool === 'text' && clickedOnEmpty) {
+    if (activeTool === 'pencil') {
+      newShapeId.current = addShape({
+        type: 'pencil',
+        x: 0,
+        y: 0,
+        points: [pos.x, pos.y],
+        stroke: '#26241F',
+      });
+    } else if (activeTool === 'text') {
       const text = window.prompt('Enter drafting text:');
       if (text) {
-        const shapeId = addShape({ type: 'text', x: pos.x, y: pos.y, text, width: 160, fill: '#26241F' });
+        const shapeId = addShape({
+          type: 'text',
+          x: pos.x,
+          y: pos.y,
+          text,
+          width: 160,
+          fill: '#26241F',
+        });
         setSelectedIds([shapeId]);
       }
       isDrawing.current = false;
@@ -230,32 +242,87 @@ export default function CanvasStage({ isOutlineOpen: externalOutlineOpen, onClos
       return;
     }
 
-    if (!isDrawing.current || !newShapeId.current) return;
-    const updateShapeSilent = useCanvasStore.getState().updateShapeSilent;
+    if (!isDrawing.current) return;
 
-    if (activeTool === 'rectangle') {
-      const w = pos.x - startPos.current.x;
-      const h = pos.y - startPos.current.y;
-      updateShapeSilent(newShapeId.current, {
-        x: w < 0 ? pos.x : startPos.current.x,
-        y: h < 0 ? pos.y : startPos.current.y,
-        width: Math.abs(w),
-        height: Math.abs(h),
-      });
-    } else if (activeTool === 'circle') {
-      const rx = Math.abs(pos.x - startPos.current.x);
-      const ry = Math.abs(pos.y - startPos.current.y);
-      updateShapeSilent(newShapeId.current, { radiusX: rx, radiusY: ry });
-    } else if (activeTool === 'arrow') {
-      updateShapeSilent(newShapeId.current, {
-        points: [startPos.current.x, startPos.current.y, pos.x, pos.y],
-      });
-    } else if (activeTool === 'pencil') {
-      const shape = useCanvasStore.getState().shapes.find((s) => s.id === newShapeId.current);
-      if (shape) {
-        updateShapeSilent(newShapeId.current, {
-          points: [...shape.points, pos.x, pos.y],
+    const dx = pos.x - startPos.current.x;
+    const dy = pos.y - startPos.current.y;
+    const dist = Math.hypot(dx, dy);
+
+    // If pointer has moved beyond threshold (4px), consider it an active drag
+    if (dist > 4) {
+      hasMoved.current = true;
+    }
+
+    // Lazy instantiation of dragged shape once moved > 4px
+    if (hasMoved.current && !newShapeId.current) {
+      if (activeTool === 'rectangle') {
+        newShapeId.current = addShape({
+          type: 'rectangle',
+          x: dx < 0 ? pos.x : startPos.current.x,
+          y: dy < 0 ? pos.y : startPos.current.y,
+          width: Math.max(5, Math.abs(dx)),
+          height: Math.max(5, Math.abs(dy)),
+          fill: '#FFFFFF',
+          stroke: '#26241F',
         });
+      } else if (activeTool === 'circle') {
+        newShapeId.current = addShape({
+          type: 'circle',
+          x: startPos.current.x,
+          y: startPos.current.y,
+          radiusX: Math.max(5, Math.abs(dx)),
+          radiusY: Math.max(5, Math.abs(dy)),
+          fill: '#FFFFFF',
+          stroke: '#26241F',
+        });
+      } else if (activeTool === 'diamond') {
+        newShapeId.current = addShape({
+          type: 'diamond',
+          x: dx < 0 ? pos.x : startPos.current.x,
+          y: dy < 0 ? pos.y : startPos.current.y,
+          width: Math.max(5, Math.abs(dx)),
+          height: Math.max(5, Math.abs(dy)),
+          fill: '#FFFFFF',
+          stroke: '#26241F',
+        });
+      } else if (activeTool === 'arrow') {
+        newShapeId.current = addShape({
+          type: 'arrow',
+          x: 0,
+          y: 0,
+          points: [startPos.current.x, startPos.current.y, pos.x, pos.y],
+          stroke: '#26241F',
+        });
+      }
+      return;
+    }
+
+    if (newShapeId.current) {
+      const updateShapeSilent = useCanvasStore.getState().updateShapeSilent;
+
+      if (activeTool === 'rectangle' || activeTool === 'diamond') {
+        updateShapeSilent(newShapeId.current, {
+          x: dx < 0 ? pos.x : startPos.current.x,
+          y: dy < 0 ? pos.y : startPos.current.y,
+          width: Math.max(5, Math.abs(dx)),
+          height: Math.max(5, Math.abs(dy)),
+        });
+      } else if (activeTool === 'circle') {
+        const rx = Math.max(5, Math.abs(dx));
+        const ry = Math.max(5, Math.abs(dy));
+        updateShapeSilent(newShapeId.current, { radiusX: rx, radiusY: ry });
+      } else if (activeTool === 'arrow') {
+        const orthoPoints = orthogonalManualArrow(startPos.current, pos);
+        updateShapeSilent(newShapeId.current, {
+          points: orthoPoints,
+        });
+      } else if (activeTool === 'pencil') {
+        const shape = useCanvasStore.getState().shapes.find((s) => s.id === newShapeId.current);
+        if (shape) {
+          updateShapeSilent(newShapeId.current, {
+            points: [...shape.points, pos.x, pos.y],
+          });
+        }
       }
     }
   };
@@ -267,8 +334,80 @@ export default function CanvasStage({ isOutlineOpen: externalOutlineOpen, onClos
     }
     if (!isDrawing.current) return;
     isDrawing.current = false;
-    newShapeId.current = null;
-    useCanvasStore.getState().setActiveTool('select');
+
+    // Single-click on canvas with a shape tool without dragging: drop standard static symbol
+    if (!hasMoved.current && !newShapeId.current) {
+      const clickPos = startPos.current;
+      let createdId = null;
+
+      if (activeTool === 'rectangle') {
+        createdId = addShape({
+          type: 'rectangle',
+          x: Math.round(clickPos.x - 70),
+          y: Math.round(clickPos.y - 35),
+          width: 140,
+          height: 70,
+          fill: '#FFFFFF',
+          stroke: '#26241F',
+        });
+      } else if (activeTool === 'circle') {
+        createdId = addShape({
+          type: 'circle',
+          x: Math.round(clickPos.x),
+          y: Math.round(clickPos.y),
+          radiusX: 45,
+          radiusY: 45,
+          fill: '#FFFFFF',
+          stroke: '#26241F',
+        });
+      } else if (activeTool === 'diamond') {
+        createdId = addShape({
+          type: 'diamond',
+          x: Math.round(clickPos.x - 60),
+          y: Math.round(clickPos.y - 40),
+          width: 120,
+          height: 80,
+          fill: '#FFFFFF',
+          stroke: '#26241F',
+        });
+      } else if (activeTool === 'arrow') {
+        createdId = addShape({
+          type: 'arrow',
+          x: 0,
+          y: 0,
+          points: [
+            Math.round(clickPos.x - 60),
+            Math.round(clickPos.y),
+            Math.round(clickPos.x + 60),
+            Math.round(clickPos.y),
+          ],
+          stroke: '#26241F',
+        });
+      }
+
+      useCanvasStore.getState().setActiveTool('select');
+      if (createdId) {
+        setSelectedIds([createdId]);
+      }
+      newShapeId.current = null;
+      return;
+    }
+
+    if (newShapeId.current) {
+      const shapeId = newShapeId.current;
+      useCanvasStore.getState().setActiveTool('select');
+      setSelectedIds([shapeId]);
+
+      // If user finished drawing, commit final dragged shape into undo history
+      const store = useCanvasStore.getState();
+      const finalShape = store.shapes.find((s) => s.id === shapeId);
+      if (finalShape) {
+        const history = store._pushHistory(store.shapes);
+        useCanvasStore.setState({ ...history });
+      }
+
+      newShapeId.current = null;
+    }
   };
 
   const isDraggable = activeTool === 'hand';

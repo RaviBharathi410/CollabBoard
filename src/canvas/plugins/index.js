@@ -1,5 +1,8 @@
 import FlowchartPlugin from './flowchart/FlowchartPlugin';
 import UMLClassPlugin from './umlClass/UMLClassPlugin';
+import SequencePlugin from './sequence/SequencePlugin';
+import UseCasePlugin from './useCase/UseCasePlugin';
+import ERDPlugin from './erd/ERDPlugin';
 
 /**
  * Diagram Type Plugin Registry.
@@ -7,12 +10,18 @@ import UMLClassPlugin from './umlClass/UMLClassPlugin';
  */
 const pluginRegistry = new Map();
 
-// Register default MVP plugins
+// Register default plugins
 const defaultFlowchart = new FlowchartPlugin();
 const defaultUML = new UMLClassPlugin();
+const defaultSequence = new SequencePlugin();
+const defaultUseCase = new UseCasePlugin();
+const defaultERD = new ERDPlugin();
 
 pluginRegistry.set(defaultFlowchart.id, defaultFlowchart);
 pluginRegistry.set(defaultUML.id, defaultUML);
+pluginRegistry.set(defaultSequence.id, defaultSequence);
+pluginRegistry.set(defaultUseCase.id, defaultUseCase);
+pluginRegistry.set(defaultERD.id, defaultERD);
 
 /**
  * Registers a new diagram type plugin.
@@ -51,4 +60,4 @@ export function getDefaultPlugin() {
   return defaultFlowchart;
 }
 
-export { FlowchartPlugin, UMLClassPlugin };
+export { FlowchartPlugin, UMLClassPlugin, SequencePlugin, UseCasePlugin, ERDPlugin };

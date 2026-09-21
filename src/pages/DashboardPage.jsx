@@ -7,6 +7,7 @@ import CommandPalette from '../components/CommandPalette';
 import BoardTile from '../components/BoardTile';
 import { useAuth } from '../context/AuthContext';
 import { getUserBoards, createBoard } from '../firebase/db';
+import { TEMPLATES, getTemplateByTitle } from './templates/templateRegistry';
 
 export default function DashboardPage() {
   const { currentUser } = useAuth();
@@ -37,13 +38,25 @@ export default function DashboardPage() {
     loadBoards();
   }, [currentUser]);
 
-  // Handle board creation
-  const handleCreateBoard = async (title = 'Untitled Board') => {
+  // Handle board creation with optional template starter content
+  const handleCreateBoard = async (title = 'Untitled Board', template = null) => {
     if (!currentUser?.uid || creating) return;
+    const tpl = template || getTemplateByTitle(title);
+    const finalTitle = tpl ? tpl.title : title;
     try {
       setCreating(true);
-      const newBoard = await createBoard(currentUser.uid, title);
-      navigate(`/board/${newBoard.id}`);
+      const extraMeta = tpl ? {
+        diagramType: tpl.diagramType,
+        starterShapes: tpl.starterShapes,
+      } : {};
+      const newBoard = await createBoard(currentUser.uid, finalTitle, extraMeta);
+      navigate(`/board/${newBoard.id}`, {
+        state: {
+          title: finalTitle,
+          diagramType: tpl?.diagramType || 'flowchart',
+          starterShapes: tpl?.starterShapes || [],
+        },
+      });
     } catch (err) {
       console.error('Failed to create board:', err);
     } finally {
@@ -81,12 +94,7 @@ export default function DashboardPage() {
     1: [{ name: 'Elena', color: '#2B5C8F' }],
   };
 
-  const templates = [
-    { title: 'System Architecture', tag: 'Arch' },
-    { title: 'User Flow Sequence', tag: 'Flow' },
-    { title: 'ER Diagram & Schema', tag: 'Data' },
-    { title: 'Brainstorm & Mindmap', tag: 'Idea' },
-  ];
+  const templates = TEMPLATES;
 
   return (
     <div className="table-layout bg-graph-paper">
@@ -159,12 +167,12 @@ export default function DashboardPage() {
               <div className="templates-grid">
                 {templates.map((tpl) => (
                   <div
-                    key={tpl.title}
+                    key={tpl.id || tpl.title}
                     className="template-tile card"
-                    onClick={() => handleCreateBoard(tpl.title)}
+                    onClick={() => handleCreateBoard(tpl.title, tpl)}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreateBoard(tpl.title)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateBoard(tpl.title, tpl)}
                   >
                     <div className="template-preview">
                       <Layers size={28} className="template-icon" />

@@ -2,6 +2,7 @@ import React from 'react';
 import { Layer, Rect, Ellipse, Arrow, Line, Text, Transformer, Group } from 'react-konva';
 import useCanvasStore from '../hooks/useCanvasStore';
 import { getDiagramPlugin } from '../plugins';
+import { getBestConnectionPoints, findConnectedNodeAt } from '../utils/connectionGeometry';
 
 export function computeTransformedDimensions(shape, { scaleX = 1, scaleY = 1, x, y, width, height, radiusX, radiusY }) {
   const updates = {
@@ -12,9 +13,9 @@ export function computeTransformedDimensions(shape, { scaleX = 1, scaleY = 1, x,
   const absScaleX = Math.abs(scaleX) || 1;
   const absScaleY = Math.abs(scaleY) || 1;
 
-  if (shape.type === 'rectangle' || shape.type === 'uml_class') {
-    const origW = (width !== undefined && width > 0) ? width : (shape.width || 0);
-    const origH = (height !== undefined && height > 0) ? height : (shape.height || 0);
+  if (shape.type === 'rectangle' || shape.type === 'uml_class' || shape.type === 'diamond' || shape.type === 'decision') {
+    const origW = (width !== undefined && width > 0) ? width : (shape.width || (shape.type === 'diamond' || shape.type === 'decision' ? 120 : 140));
+    const origH = (height !== undefined && height > 0) ? height : (shape.height || (shape.type === 'diamond' || shape.type === 'decision' ? 80 : 70));
     updates.width = Math.round(Math.max(5, origW * absScaleX));
     updates.height = Math.round(Math.max(5, origH * absScaleY));
   } else if (shape.type === 'circle') {
@@ -39,9 +40,12 @@ export function transformBoundBox(oldBox, newBox) {
 export default function ShapesLayer({ selectedIds, onSelect }) {
   const shapes = useCanvasStore((state) => state.shapes);
   const updateShape = useCanvasStore((state) => state.updateShape);
+  const updateShapes = useCanvasStore((state) => state.updateShapes);
+  const updateShapesSilent = useCanvasStore((state) => state.updateShapesSilent);
   
   const trRef = React.useRef();
   const layerRef = React.useRef();
+  const dragRafRef = React.useRef(null);
 
   // Attach transformer to selected nodes without rebuilding on every shape update
   React.useEffect(() => {
@@ -104,15 +108,115 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
     updateShape(shape.id, updates);
   };
 
-  const handleDragMove = () => {
-    // Native Konva dragging maintains 60/120fps; omit store state thrashing per pixel
+  /**
+   * Recomputes points for all arrows attached to shapeId when moved to (curX, curY).
+   */
+  const getConnectedArrowsAndPoints = (shapeId, curX, curY) => {
+    const currentShapes = useCanvasStore.getState().shapes;
+    const movedShape = currentShapes.find((s) => s.id === shapeId);
+    if (!movedShape) return [];
+
+    const simulatedMovedShape = { ...movedShape, x: curX, y: curY };
+    const shapesMap = new Map(currentShapes.map((s) => [s.id, s]));
+    shapesMap.set(shapeId, simulatedMovedShape);
+
+    const updates = [];
+
+    for (const arrow of currentShapes) {
+      if (arrow.type !== 'arrow' && arrow.type !== 'connector') continue;
+
+      const isConnected = arrow.source === shapeId || arrow.target === shapeId;
+
+      let effectiveSource = arrow.source;
+      let effectiveTarget = arrow.target;
+
+      // Outer snap boundary re-evaluation
+      if (!arrow.source && Array.isArray(arrow.points) && arrow.points.length >= 2) {
+        const startX = arrow.points[0];
+        const startY = arrow.points[1];
+        const hitSource = findConnectedNodeAt(Array.from(shapesMap.values()), startX, startY, [arrow.id]);
+        if (hitSource) effectiveSource = hitSource.id;
+      }
+
+      if (!arrow.target && Array.isArray(arrow.points) && arrow.points.length >= 4) {
+        const endX = arrow.points[arrow.points.length - 2];
+        const endY = arrow.points[arrow.points.length - 1];
+        const hitTarget = findConnectedNodeAt(Array.from(shapesMap.values()), endX, endY, [arrow.id]);
+        if (hitTarget) effectiveTarget = hitTarget.id;
+      }
+
+      if (isConnected) {
+        const sNode = effectiveSource ? shapesMap.get(effectiveSource) : null;
+        const tNode = effectiveTarget ? shapesMap.get(effectiveTarget) : null;
+        const newPoints = getBestConnectionPoints(sNode, tNode, arrow.points);
+
+        updates.push({
+          id: arrow.id,
+          source: effectiveSource || arrow.source,
+          target: effectiveTarget || arrow.target,
+          points: newPoints,
+        });
+      }
+    }
+
+    return updates;
+  };
+
+  const handleDragMove = (e, shape) => {
+    // If an arrow itself is being dragged, let Konva handle it natively
+    if (shape.type === 'arrow') return;
+
+    const curX = Math.round(e.target.x());
+    const curY = Math.round(e.target.y());
+
+    if (dragRafRef.current) {
+      cancelAnimationFrame(dragRafRef.current);
+    }
+
+    dragRafRef.current = requestAnimationFrame(() => {
+      const arrowUpdates = getConnectedArrowsAndPoints(shape.id, curX, curY);
+      if (arrowUpdates.length > 0) {
+        // Silently update both the dragged shape and connected arrows at 60fps
+        updateShapesSilent([
+          { id: shape.id, x: curX, y: curY },
+          ...arrowUpdates,
+        ]);
+      }
+    });
   };
 
   const handleDragEnd = (e, shape) => {
-    updateShape(shape.id, {
-      x: Math.round(e.target.x()),
-      y: Math.round(e.target.y()),
-    });
+    if (dragRafRef.current) {
+      cancelAnimationFrame(dragRafRef.current);
+    }
+
+    if (shape.type === 'arrow') {
+      const dx = Math.round(e.target.x());
+      const dy = Math.round(e.target.y());
+      e.target.x(0);
+      e.target.y(0);
+      if (Array.isArray(shape.points) && (dx !== 0 || dy !== 0)) {
+        const newPoints = shape.points.map((pt, i) => (i % 2 === 0 ? pt + dx : pt + dy));
+        updateShape(shape.id, { points: newPoints, source: undefined, target: undefined });
+      }
+      return;
+    }
+
+    const curX = Math.round(e.target.x());
+    const curY = Math.round(e.target.y());
+    const arrowUpdates = getConnectedArrowsAndPoints(shape.id, curX, curY);
+
+    if (arrowUpdates.length > 0) {
+      updateShapes([
+        { id: shape.id, x: curX, y: curY },
+        ...arrowUpdates,
+      ]);
+    } else {
+      updateShape(shape.id, {
+        x: curX,
+        y: curY,
+      });
+    }
   };
 
   // Tactile ochre AI Badge
@@ -136,7 +240,7 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
     opacity: shape.opacity ?? 1,
     onClick: () => onSelect(shape.id),
     onTap: () => onSelect(shape.id),
-    onDragMove: handleDragMove,
+    onDragMove: (e) => handleDragMove(e, shape),
     onDragEnd: (e) => handleDragEnd(e, shape),
     onTransformEnd: (e) => handleTransformEnd(e, shape),
   });
@@ -145,15 +249,21 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
     <Layer ref={layerRef}>
       {shapes.map((shape) => {
         // 1. Check if shape explicitly delegates to a diagram plugin
-        const pluginId = shape.pluginType || (shape.type === 'uml_class' ? 'uml-class' : null);
+        const pluginId =
+          shape.pluginType ||
+          (shape.type === 'uml_class' ? 'uml-class' : null) ||
+          (shape.type === 'sequence_lifeline' || shape.type === 'sequence_activation' || shape.type === 'sequence_message' ? 'sequence' : null) ||
+          (shape.type === 'usecase_actor' || shape.type === 'usecase_oval' || shape.type === 'usecase_boundary' || shape.subtype === 'actor' || shape.subtype === 'use_case' || shape.subtype === 'system_boundary' ? 'use-case' : null) ||
+          (shape.type === 'erd_table' || shape.subtype === 'table' || shape.subtype === 'erd_table' ? 'erd' : null) ||
+          (shape.type === 'flowchart_node' || shape.pluginType === 'flowchart' ? 'flowchart' : null);
         const plugin = getDiagramPlugin(pluginId);
         if (plugin) {
-          if (shape.type === 'arrow' || shape.type === 'connector') {
+          if (shape.type === 'arrow' || shape.type === 'connector' || shape.type === 'sequence_message' || shape.type === 'usecase_edge' || shape.type === 'erd_edge') {
             const customEdge = plugin.renderEdge(shape, { commonProps });
-            if (customEdge) return customEdge;
+            if (customEdge) return React.isValidElement(customEdge) ? React.cloneElement(customEdge, { key: shape.id }) : customEdge;
           } else {
             const customNode = plugin.renderNode(shape, { commonProps });
-            if (customNode) return customNode;
+            if (customNode) return React.isValidElement(customNode) ? React.cloneElement(customNode, { key: shape.id }) : customNode;
           }
         }
 
@@ -162,7 +272,7 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
           const umlPlugin = getDiagramPlugin('uml-class');
           if (umlPlugin) {
             const customNode = umlPlugin.renderNode(shape, { commonProps });
-            if (customNode) return customNode;
+            if (customNode) return React.isValidElement(customNode) ? React.cloneElement(customNode, { key: shape.id }) : customNode;
           }
         }
 
@@ -171,7 +281,7 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
           const umlPlugin = getDiagramPlugin('uml-class');
           if (umlPlugin) {
             const customEdge = umlPlugin.renderEdge(shape, { commonProps });
-            if (customEdge) return customEdge;
+            if (customEdge) return React.isValidElement(customEdge) ? React.cloneElement(customEdge, { key: shape.id }) : customEdge;
           }
         }
 
@@ -194,6 +304,19 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
                 shadowBlur={3}
                 shadowOffsetY={1}
               />
+              {shape.text ? (
+                <Text
+                  text={shape.text}
+                  width={shape.width}
+                  height={shape.height}
+                  align="center"
+                  verticalAlign="middle"
+                  fontSize={shape.fontSize || 13}
+                  fontFamily="IBM Plex Sans"
+                  fill={shape.textFill || shape.stroke || '#26241F'}
+                  listening={false}
+                />
+              ) : null}
               <AiBadge shape={shape} width={shape.width} height={shape.height} />
             </Group>
           );
@@ -218,7 +341,59 @@ export default function ShapesLayer({ selectedIds, onSelect }) {
                 shadowBlur={3}
                 shadowOffsetY={1}
               />
+              {shape.text ? (
+                <Text
+                  x={-rx}
+                  y={-ry}
+                  text={shape.text}
+                  width={rx * 2}
+                  height={ry * 2}
+                  align="center"
+                  verticalAlign="middle"
+                  fontSize={shape.fontSize || 13}
+                  fontFamily="IBM Plex Sans"
+                  fill={shape.textFill || shape.stroke || '#26241F'}
+                  listening={false}
+                />
+              ) : null}
               <AiBadge shape={shape} width={rx * 2} height={ry * 2} />
+            </Group>
+          );
+        }
+        if (shape.type === 'diamond' || shape.type === 'decision') {
+          const w = shape.width || 120;
+          const h = shape.height || 80;
+          return (
+            <Group
+              key={shape.id}
+              width={w}
+              height={h}
+              {...commonProps(shape)}
+            >
+              <Line
+                points={[w / 2, 0, w, h / 2, w / 2, h, 0, h / 2]}
+                closed
+                fill={shape.fill || '#FFFFFF'}
+                stroke={shape.stroke || '#26241F'}
+                strokeWidth={shape.strokeWidth || 1.5}
+                shadowColor="rgba(38, 36, 31, 0.05)"
+                shadowBlur={3}
+                shadowOffsetY={1}
+              />
+              {shape.text ? (
+                <Text
+                  text={shape.text}
+                  width={w}
+                  height={h}
+                  align="center"
+                  verticalAlign="middle"
+                  fontSize={shape.fontSize || 13}
+                  fontFamily="IBM Plex Sans"
+                  fill={shape.textFill || shape.stroke || '#26241F'}
+                  listening={false}
+                />
+              ) : null}
+              <AiBadge shape={shape} width={w} height={h} />
             </Group>
           );
         }

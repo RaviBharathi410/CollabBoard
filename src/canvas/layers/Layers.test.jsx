@@ -321,5 +321,35 @@ describe('Layers & Transform Math', () => {
       expect(aiShape).not.toBeNull();
       expect(aiShape.textContent).toContain('✦ AI');
     });
+
+    it('computes transformed dimensions for diamond shape', () => {
+      const diamondShape = { type: 'diamond', width: 120, height: 80 };
+
+      const scaled = computeTransformedDimensions(diamondShape, {
+        scaleX: 1.5,
+        scaleY: 1.5,
+        x: 40,
+        y: 60,
+      });
+      expect(scaled.width).toBe(180);
+      expect(scaled.height).toBe(120);
+      expect(scaled.x).toBe(40);
+      expect(scaled.y).toBe(60);
+    });
+
+    it('renders diamond shape with group and line polygon', async () => {
+      useCanvasStore.setState({
+        shapes: [
+          { id: 'dia-1', type: 'diamond', x: 50, y: 50, width: 120, height: 80, fill: '#FFFFFF', stroke: '#26241F' },
+        ],
+      });
+
+      await act(async () => {
+        root.render(<ShapesLayer selectedIds={[]} onSelect={vi.fn()} />);
+      });
+
+      const diamond = container.querySelector('[data-shape-id="dia-1"]');
+      expect(diamond).not.toBeNull();
+    });
   });
 });

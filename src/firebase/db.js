@@ -40,7 +40,7 @@ export function deriveRoleLists(sharedWith = []) {
 /**
  * Creates a new board metadata document
  */
-export async function createBoard(userId, title = 'Untitled Board') {
+export async function createBoard(userId, title = 'Untitled Board', extraMeta = {}) {
   if (!userId) throw new Error('User ID is required to create a board');
   
   const boardId = uuidv4();
@@ -51,6 +51,8 @@ export async function createBoard(userId, title = 'Untitled Board') {
     id: boardId,
     title,
     ownerId: userId,
+    diagramType: extraMeta.diagramType || 'flowchart',
+    starterShapes: Array.isArray(extraMeta.starterShapes) ? extraMeta.starterShapes : [],
     sharedWith,
     sharedEmails,
     editors,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Group, Line, Text } from 'react-konva';
+import { Group, Line, Text, Rect } from 'react-konva';
 
 /**
  * Geometric helper: computes unit vectors and marker geometry
@@ -152,8 +152,26 @@ export function UMLConnector({ shape, commonProps }) {
     ? shape.label
     : '';
 
-  const midX = (pStart.x + pEnd.x) / 2;
-  const midY = (pStart.y + pEnd.y) / 2;
+  // Find midpoint along the longest segment of the orthogonal path
+  let labelX = (pStart.x + pEnd.x) / 2;
+  let labelY = (pStart.y + pEnd.y) / 2;
+  let maxSegLen = 0;
+
+  for (let i = 0; i < points.length - 2; i += 2) {
+    const sx = points[i];
+    const sy = points[i + 1];
+    const ex = points[i + 2];
+    const ey = points[i + 3];
+    const segLen = Math.hypot(ex - sx, ey - sy);
+    if (segLen > maxSegLen) {
+      maxSegLen = segLen;
+      labelX = (sx + ex) / 2;
+      labelY = (sy + ey) / 2;
+    }
+  }
+
+  const badgeW = Math.max(64, Math.min(130, (edgeLabel || '').length * 7.5 + 16));
+  const badgeH = 20;
 
   return (
     <Group key={shape.id} {...commonProps(shape)}>
@@ -170,19 +188,34 @@ export function UMLConnector({ shape, commonProps }) {
       {/* Terminal marker */}
       {markerElement}
 
-      {/* Edge relationship label */}
+      {/* Edge relationship label with crisp pill background */}
       {edgeLabel && (
-        <Text
-          text={edgeLabel}
-          x={midX - 50}
-          y={midY - 14}
-          width={100}
-          align="center"
-          fontSize={11}
-          fontFamily="IBM Plex Sans"
-          fill="#4A4754"
-          listening={false}
-        />
+        <Group x={labelX} y={labelY} listening={false}>
+          <Rect
+            x={-badgeW / 2}
+            y={-badgeH / 2}
+            width={badgeW}
+            height={badgeH}
+            fill="#FFFFFF"
+            stroke="#DCDAD5"
+            strokeWidth={1}
+            cornerRadius={4}
+            shadowColor="rgba(0,0,0,0.06)"
+            shadowBlur={2}
+            shadowOffsetY={1}
+          />
+          <Text
+            text={edgeLabel}
+            x={-badgeW / 2}
+            y={-badgeH / 2 + 4}
+            width={badgeW}
+            align="center"
+            fontSize={10.5}
+            fontFamily="IBM Plex Sans"
+            fontStyle="600"
+            fill="#4A4754"
+          />
+        </Group>
       )}
 
       {/* Source Multiplicity */}

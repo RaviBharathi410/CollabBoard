@@ -3,6 +3,11 @@
  */
 import { execSync } from 'child_process';
 
+// Only run port clearing on Windows; Linux containers (Render, Railway, Docker) allocate isolated network namespaces
+if (process.platform !== 'win32') {
+  process.exit(0);
+}
+
 const isAll = process.argv.includes('--all');
 const PORTS = isAll ? [3001, 1234, 5173, 5174, 5175, 8000] : [3001, 1234];
 

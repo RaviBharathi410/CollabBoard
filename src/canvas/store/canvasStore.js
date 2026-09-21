@@ -110,8 +110,8 @@ export const useCanvasStore = create((set, get) => ({
 
   // ── CRUD ──
   addShape: (shapeData) => {
-    const id = uuidv4();
-    const shape = { id, ...shapeData };
+    const id = shapeData?.id || uuidv4();
+    const shape = { ...shapeData, id };
     const prev = get().shapes;
     const history = get()._pushHistory(prev);
     set({
@@ -150,7 +150,29 @@ export const useCanvasStore = create((set, get) => ({
     });
   },
 
-  // Batch update — no history push (used during drag)
+  // Batch update — pushes a single history entry for atomic undo
+  updateShapes: (updatesList) => {
+    if (!Array.isArray(updatesList) || updatesList.length === 0) return;
+    const prev = get().shapes;
+    const history = get()._pushHistory(prev);
+    const updateMap = new Map(updatesList.map((u) => [u.id, u]));
+    const next = prev.map((s) => (updateMap.has(s.id) ? { ...s, ...updateMap.get(s.id) } : s));
+    set({
+      shapes: next,
+      ...history,
+    });
+  },
+
+  // Batch update silent — no history push (used during drag)
+  updateShapesSilent: (updatesList) => {
+    if (!Array.isArray(updatesList) || updatesList.length === 0) return;
+    const updateMap = new Map(updatesList.map((u) => [u.id, u]));
+    set((state) => ({
+      shapes: state.shapes.map((s) => (updateMap.has(s.id) ? { ...s, ...updateMap.get(s.id) } : s)),
+    }));
+  },
+
+  // Single shape silent update
   updateShapeSilent: (id, updates) => {
     set((state) => ({
       shapes: state.shapes.map((s) => (s.id === id ? { ...s, ...updates } : s)),

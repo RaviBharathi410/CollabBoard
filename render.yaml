@@ -6,7 +6,7 @@ services:
     plan: starter
     region: oregon
     buildCommand: npm install
-    startCommand: npm run server
+    startCommand: npm start
     healthCheckPath: /api/health
     envVars:
       - key: PORT
@@ -41,6 +41,8 @@ services:
       - key: PORT
         value: 8000
       - key: NLP_MODEL_PATH
+        value: google/flan-t5-small
+      - key: HF_MODEL_ID
         value: google/flan-t5-small
       - key: PYTHONUNBUFFERED
         value: "1"

@@ -4,21 +4,26 @@ import {
   Hand, 
   Square, 
   Circle, 
+  Diamond,
   Minus, 
   PenTool, 
   Type, 
   Undo, 
   Redo, 
-  Scan 
+  Scan,
+  Sparkles,
+  Plus
 } from 'lucide-react';
 import useCanvasStore from '../hooks/useCanvasStore';
+import { autoArrangeDiagram } from '../utils/orthogonalRouter';
 
 const tools = [
   { id: 'select', icon: MousePointer2, label: 'Select (V)' },
   { id: 'hand', icon: Hand, label: 'Pan (H)' },
   { id: 'marquee', icon: Scan, label: 'Marquee Region (M)' },
   { id: 'rectangle', icon: Square, label: 'Rectangle (R)' },
-  { id: 'circle', icon: Circle, label: 'Circle (O)' },
+  { id: 'circle', icon: Circle, label: 'Circle (C)' },
+  { id: 'diamond', icon: Diamond, label: 'Diamond (D)' },
   { id: 'arrow', icon: Minus, label: 'Arrow (A)' },
   { id: 'pencil', icon: PenTool, label: 'Draw (P)' },
   { id: 'text', icon: Type, label: 'Text (T)' },
@@ -30,6 +35,9 @@ export default function Toolbar() {
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
   const undoManager = useCanvasStore((state) => state.undoManager);
+  const diagramType = useCanvasStore((state) => state.diagramType);
+  const addShape = useCanvasStore((state) => state.addShape);
+  const setSelectedIds = useCanvasStore((state) => state.setSelectedIds);
   
   const [, setTick] = React.useState(0);
   React.useEffect(() => {
@@ -44,7 +52,7 @@ export default function Toolbar() {
     }
   }, [undoManager]);
 
-  // Global keyboard shortcuts for tools: V, H, R, C (or O), A, P, T
+  // Global keyboard shortcuts for tools: V, H, R, C (or O), D, A, P, T
   React.useEffect(() => {
     const handleKeyDown = (e) => {
       if (
@@ -75,6 +83,9 @@ export default function Toolbar() {
         case 'o':
           setActiveTool('circle');
           break;
+        case 'd':
+          setActiveTool('diamond');
+          break;
         case 'a':
           setActiveTool('arrow');
           break;
@@ -93,6 +104,61 @@ export default function Toolbar() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setActiveTool]);
+
+  const handleQuickInsert = () => {
+    if (diagramType === 'erd') {
+      const id = addShape({
+        type: 'erd_table',
+        subtype: 'table',
+        name: 'NewTable',
+        columns: [
+          { name: 'id', type: 'INT', isPrimaryKey: true },
+          { name: 'name', type: 'VARCHAR(255)' },
+        ],
+        x: 250,
+        y: 200,
+        width: 220,
+        height: 140,
+      });
+      setSelectedIds([id]);
+    } else if (diagramType === 'uml-class') {
+      const id = addShape({
+        type: 'uml_class',
+        subtype: 'class',
+        name: 'NewClass',
+        attributes: ['+ id: string'],
+        methods: ['+ execute(): void'],
+        x: 250,
+        y: 200,
+        width: 180,
+        height: 120,
+        fill: '#FFFFFF',
+        stroke: '#26241F',
+      });
+      setSelectedIds([id]);
+    } else if (diagramType === 'sequence') {
+      const id = addShape({
+        type: 'sequence_lifeline',
+        name: 'Actor',
+        x: 250,
+        y: 100,
+        width: 120,
+        height: 350,
+      });
+      setSelectedIds([id]);
+    } else if (diagramType === 'use-case') {
+      const id = addShape({
+        type: 'usecase_actor',
+        subtype: 'actor',
+        name: 'User',
+        x: 250,
+        y: 200,
+        width: 60,
+        height: 90,
+      });
+      setSelectedIds([id]);
+    }
+  };
 
   const canUndo = undoManager && undoManager.undoStack.length > 0;
   const canRedo = undoManager && undoManager.redoStack.length > 0;
@@ -119,6 +185,23 @@ export default function Toolbar() {
         })}
       </div>
       
+      {['erd', 'uml-class', 'sequence', 'use-case'].includes(diagramType) && (
+        <>
+          <div className="toolbar-v-divider" />
+          <div className="toolbar-section">
+            <button
+              type="button"
+              className="tool-btn quick-insert-btn"
+              title={`Insert ${diagramType === 'erd' ? 'ERD Table' : diagramType === 'uml-class' ? 'UML Class' : diagramType === 'sequence' ? 'Sequence Lifeline' : 'Use Case Actor'}`}
+              aria-label={`Insert ${diagramType === 'erd' ? 'Table' : diagramType === 'uml-class' ? 'Class' : diagramType === 'sequence' ? 'Lifeline' : 'Actor'}`}
+              onClick={handleQuickInsert}
+            >
+              <Plus size={15} />
+            </button>
+          </div>
+        </>
+      )}
+
       <div className="toolbar-v-divider" />
       
       <div className="toolbar-section">
@@ -143,6 +226,28 @@ export default function Toolbar() {
           style={{ opacity: !canRedo ? 0.35 : 1 }}
         >
           <Redo size={15} />
+        </button>
+      </div>
+
+      <div className="toolbar-v-divider" />
+
+      <div className="toolbar-section">
+        <button
+          type="button"
+          className="tool-btn"
+          title="Tidy Diagram (Auto-Arrange Layout & Orthogonal Arrows)"
+          aria-label="Tidy Diagram"
+          onClick={() => {
+            const store = useCanvasStore.getState();
+            const arranged = autoArrangeDiagram(store.shapes);
+            const history = store._pushHistory(store.shapes);
+            useCanvasStore.setState({
+              shapes: arranged,
+              ...history,
+            });
+          }}
+        >
+          <Sparkles size={15} />
         </button>
       </div>
 

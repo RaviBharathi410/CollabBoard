@@ -29,9 +29,9 @@ vi.mock('./hooks/useAIEngine', () => ({
   }),
 }));
 
-// Mock react-konva Stage to support testing mouse down events
+// Mock react-konva Stage to support testing mouse down and click events
 vi.mock('react-konva', () => ({
-  Stage: ({ children, onMouseDown, ...props }) => (
+  Stage: ({ children, onMouseDown, onMouseUp, onMouseMove, ...props }) => (
     <div
       data-testid="konva-stage"
       onClick={() => {
@@ -42,12 +42,14 @@ vi.mock('react-konva', () => ({
           scaleY: () => 1,
           getPointerPosition: () => ({ x: 100, y: 100 }),
         };
-        onMouseDown?.({
+        const evt = {
           target: {
             getStage: () => fakeStage,
             name: () => 'grid',
           },
-        });
+        };
+        onMouseDown?.(evt);
+        onMouseUp?.(evt);
       }}
       {...props}
     >
@@ -282,5 +284,108 @@ describe('CanvasStage Component Interactions & Shortcuts', () => {
     });
     expect(useCanvasStore.getState().shapes.find((s) => s.id === 's1')).toBeUndefined();
     expect(useCanvasStore.getState().clipboard[0].id).toBe('s1');
+  });
+
+  it('places a static rectangle symbol with standard dimensions on single click', async () => {
+    act(() => {
+      useCanvasStore.setState({ shapes: [], selectedIds: [], activeTool: 'rectangle' });
+    });
+
+    await act(async () => {
+      root.render(<CanvasStage />);
+    });
+
+    const stageEl = container.querySelector('[data-testid="konva-stage"]');
+    await act(async () => {
+      stageEl.click();
+    });
+
+    const shapes = useCanvasStore.getState().shapes;
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0].type).toBe('rectangle');
+    expect(shapes[0].width).toBe(140);
+    expect(shapes[0].height).toBe(70);
+    expect(shapes[0].x).toBe(30); // 100 - 70
+    expect(shapes[0].y).toBe(65); // 100 - 35
+    expect(useCanvasStore.getState().selectedIds).toEqual([shapes[0].id]);
+    expect(useCanvasStore.getState().activeTool).toBe('select');
+  });
+
+  it('places a static circle symbol with standard radius on single click', async () => {
+    act(() => {
+      useCanvasStore.setState({ shapes: [], selectedIds: [], activeTool: 'circle' });
+    });
+
+    await act(async () => {
+      root.render(<CanvasStage />);
+    });
+
+    const stageEl = container.querySelector('[data-testid="konva-stage"]');
+    await act(async () => {
+      stageEl.click();
+    });
+
+    const shapes = useCanvasStore.getState().shapes;
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0].type).toBe('circle');
+    expect(shapes[0].radiusX).toBe(45);
+    expect(shapes[0].radiusY).toBe(45);
+    expect(shapes[0].x).toBe(100);
+    expect(shapes[0].y).toBe(100);
+    expect(useCanvasStore.getState().selectedIds).toEqual([shapes[0].id]);
+    expect(useCanvasStore.getState().activeTool).toBe('select');
+  });
+
+  it('places a static diamond symbol on single click and activates via "d" shortcut', async () => {
+    act(() => {
+      useCanvasStore.setState({ shapes: [], selectedIds: [], activeTool: 'select' });
+    });
+
+    await act(async () => {
+      root.render(<CanvasStage />);
+    });
+
+    // Press 'd' to switch to diamond tool
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd' }));
+    });
+    expect(useCanvasStore.getState().activeTool).toBe('diamond');
+
+    const stageEl = container.querySelector('[data-testid="konva-stage"]');
+    await act(async () => {
+      stageEl.click();
+    });
+
+    const shapes = useCanvasStore.getState().shapes;
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0].type).toBe('diamond');
+    expect(shapes[0].width).toBe(120);
+    expect(shapes[0].height).toBe(80);
+    expect(shapes[0].x).toBe(40); // 100 - 60
+    expect(shapes[0].y).toBe(60); // 100 - 40
+    expect(useCanvasStore.getState().selectedIds).toEqual([shapes[0].id]);
+    expect(useCanvasStore.getState().activeTool).toBe('select');
+  });
+
+  it('places a static horizontal arrow on single click', async () => {
+    act(() => {
+      useCanvasStore.setState({ shapes: [], selectedIds: [], activeTool: 'arrow' });
+    });
+
+    await act(async () => {
+      root.render(<CanvasStage />);
+    });
+
+    const stageEl = container.querySelector('[data-testid="konva-stage"]');
+    await act(async () => {
+      stageEl.click();
+    });
+
+    const shapes = useCanvasStore.getState().shapes;
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0].type).toBe('arrow');
+    expect(shapes[0].points).toEqual([40, 100, 160, 100]); // [100-60, 100, 100+60, 100]
+    expect(useCanvasStore.getState().selectedIds).toEqual([shapes[0].id]);
+    expect(useCanvasStore.getState().activeTool).toBe('select');
   });
 });

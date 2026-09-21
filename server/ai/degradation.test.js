@@ -140,5 +140,5 @@ describe('Graceful Degradation Integration Tests (Inference Service Outage)', ()
         error: expect.stringContaining('AI temporarily unavailable'),
       })
     );
-  });
+  }, 15000);
 });

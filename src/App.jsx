@@ -7,6 +7,9 @@ import DashboardPage from './pages/DashboardPage';
 import BoardPage from './pages/BoardPage';
 import AIStatsDashboardPage from './pages/AIStatsDashboardPage';
 import UMLVisualVerificationPage from './pages/UMLVisualVerificationPage';
+import SequenceVisualVerificationPage from './pages/SequenceVisualVerificationPage';
+import UseCaseVisualVerificationPage from './pages/UseCaseVisualVerificationPage';
+import ERDVisualVerificationPage from './pages/ERDVisualVerificationPage';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import './styles/globals.css';
@@ -21,6 +24,9 @@ function AnimatedRoutes() {
           <Route path="/get-started" element={<GetStartedPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/uml-preview" element={<UMLVisualVerificationPage />} />
+          <Route path="/sequence-preview" element={<SequenceVisualVerificationPage />} />
+          <Route path="/usecase-preview" element={<UseCaseVisualVerificationPage />} />
+          <Route path="/erd-preview" element={<ERDVisualVerificationPage />} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/board/:id" element={<ProtectedRoute><BoardPage /></ProtectedRoute>} />
           <Route path="/admin/ai-stats" element={<ProtectedRoute><AIStatsDashboardPage /></ProtectedRoute>} />

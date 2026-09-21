@@ -101,6 +101,21 @@ export default function UMLVisualVerificationPage() {
         methods: ['+ dispatch()'],
         stroke: '#2563EB',
       },
+      {
+        id: 'class-circle',
+        type: 'uml_class',
+        pluginType: 'uml-class',
+        subtype: 'class',
+        x: 750,
+        y: 430,
+        width: 220,
+        height: 180,
+        name: 'Circle_',
+        stereotype: '<<entity>>',
+        attributes: ['- radius : float', '- center : unsigned int', '- center : unsigned int', 'Ioat'],
+        methods: ['+ area(in radius : float) : double', '+ circum()', '+ setRadius()'],
+        stroke: '#059669',
+      },
 
       // ── Connectors ──
       // 1. Inheritance: Window (subclass, bottom) -> Frame (superclass, top)
@@ -110,6 +125,8 @@ export default function UMLVisualVerificationPage() {
         type: 'arrow',
         subtype: 'inheritance',
         pluginType: 'uml-class',
+        source: 'class-window',
+        target: 'class-frame',
         points: [490, 240, 490, 140],
         stroke: '#4F46E5',
         strokeWidth: 1.5,
@@ -121,6 +138,8 @@ export default function UMLVisualVerificationPage() {
         type: 'arrow',
         subtype: 'composition',
         pluginType: 'uml-class',
+        source: 'class-window',
+        target: 'class-shape',
         points: [580, 290, 750, 290],
         sourceMultiplicity: '1',
         targetMultiplicity: '0..*',
@@ -134,6 +153,8 @@ export default function UMLVisualVerificationPage() {
         type: 'arrow',
         subtype: 'aggregation',
         pluginType: 'uml-class',
+        source: 'class-window',
+        target: 'class-controller',
         points: [490, 370, 490, 470],
         sourceMultiplicity: '1',
         targetMultiplicity: '1..*',
@@ -147,6 +168,8 @@ export default function UMLVisualVerificationPage() {
         type: 'arrow',
         subtype: 'dependency',
         pluginType: 'uml-class',
+        source: 'class-window',
+        target: 'class-drawing-ctx',
         label: '<<uses>>',
         points: [400, 300, 250, 300],
         stroke: '#7C3AED',
@@ -159,9 +182,23 @@ export default function UMLVisualVerificationPage() {
         type: 'arrow',
         subtype: 'association',
         pluginType: 'uml-class',
+        source: 'class-event',
+        target: 'class-window',
         directed: true,
         points: [220, 105, 400, 250],
         stroke: '#2563EB',
+        strokeWidth: 1.5,
+      },
+      // 6. Association: Shape -> Circle_
+      {
+        id: 'edge-shape-circle',
+        type: 'arrow',
+        subtype: 'association',
+        pluginType: 'uml-class',
+        source: 'class-shape',
+        target: 'class-circle',
+        points: [840, 360, 840, 430],
+        stroke: '#059669',
         strokeWidth: 1.5,
       },
     ];
@@ -187,8 +224,8 @@ export default function UMLVisualVerificationPage() {
           <span style={{ padding: '4px 8px', background: '#F5F3FF', color: '#7C3AED', borderRadius: '4px', border: '1px solid #DDD6FE' }}>⤏ Dependency (Dashed)</span>
         </div>
       </div>
-      <div style={{ flex: 1, position: 'relative' }}>
-        <Stage width={1100} height={640}>
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <Stage width={window.innerWidth || 1280} height={Math.max(800, window.innerHeight - 80)}>
           <ShapesLayer selectedIds={[]} onSelect={() => {}} />
         </Stage>
       </div>

@@ -54,7 +54,10 @@ def _try_load(model_path: str):
             mdl = AutoModelForSeq2SeqLM.from_pretrained(target_path)
         else:
             # Fallback to Hugging Face Hub if local weights were excluded from git
-            hf_identifier = model_path if "/" in model_path and not Path(model_path).exists() else os.getenv("HF_MODEL_ID", "google/flan-t5-small")
+            if "/" in model_path and not (path / "config.json").exists():
+                hf_identifier = model_path
+            else:
+                hf_identifier = os.getenv("HF_MODEL_ID", "google/flan-t5-small")
             print(f"[NLP Model] Local weights not found at '{model_path}'. Cold-start loading from HuggingFace Hub: '{hf_identifier}' ...")
             tok = AutoTokenizer.from_pretrained(hf_identifier)
             mdl = AutoModelForSeq2SeqLM.from_pretrained(hf_identifier)
@@ -76,6 +79,10 @@ def load_nlp_model(model_path: str = _DEFAULT_MODEL_PATH):
 
 def is_loaded() -> bool:
     return _model is not None and _tokenizer is not None
+
+
+def get_model_path() -> Optional[str]:
+    return _model_path
 
 
 def repair_and_parse_diagram(raw: str) -> dict:

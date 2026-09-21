@@ -5,6 +5,19 @@ const enhancementPlugins = new Map();
 enhancementPlugins.set(flowchartEnhance.id, flowchartEnhance);
 enhancementPlugins.set(umlClassEnhance.id, umlClassEnhance);
 
+const createGatedPlugin = (id, displayName) => ({
+  id,
+  enhance: async () => ({
+    status: 'unsupported',
+    type: id,
+    message: `AI enhancement for ${displayName} is gated to preserve domain-specific notation. Canvas and direct editing are fully supported.`,
+  }),
+});
+
+enhancementPlugins.set('sequence', createGatedPlugin('sequence', 'UML Sequence Diagrams'));
+enhancementPlugins.set('use-case', createGatedPlugin('use-case', 'UML Use Case Diagrams'));
+enhancementPlugins.set('erd', createGatedPlugin('erd', 'Entity-Relationship Diagrams'));
+
 /**
  * Retrieves the AI enhancement plugin for a specific diagram type.
  * @param {string} diagramType

@@ -21,6 +21,23 @@ describe('enhancementRouter', () => {
     expect(result.message).toContain('Phase 2');
   });
 
+  it('gates Sequence, Use Case, and ERD AI enhancements with explicit status', async () => {
+    const seqResult = await enhanceDiagram({ type: 'sequence' }, 'Add lifeline');
+    expect(seqResult.status).toBe('unsupported');
+    expect(seqResult.type).toBe('sequence');
+    expect(seqResult.message).toContain('gated');
+
+    const ucResult = await enhanceDiagram({ type: 'use-case' }, 'Add actor');
+    expect(ucResult.status).toBe('unsupported');
+    expect(ucResult.type).toBe('use-case');
+    expect(ucResult.message).toContain('gated');
+
+    const erdResult = await enhanceDiagram({ type: 'erd' }, 'Add table');
+    expect(erdResult.status).toBe('unsupported');
+    expect(erdResult.type).toBe('erd');
+    expect(erdResult.message).toContain('gated');
+  });
+
   it('handles unknown diagram types gracefully without throwing', async () => {
     const result = await enhanceDiagram({ type: 'quantum-circuit' }, 'Add qubit');
     expect(result.status).toBe('unsupported');

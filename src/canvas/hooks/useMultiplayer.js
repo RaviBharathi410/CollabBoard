@@ -49,6 +49,9 @@ export default function useMultiplayer(documentName) {
 
     // ── 1. Sync Yjs to Zustand (Incoming Changes) ──
     yshapes.observe((event) => {
+      // Ignore transactions originating from our own local Zustand store sync
+      if (event.transaction.origin === 'zustand-sync') return;
+
       // We need to bypass the Zustand undo stack to prevent infinite loops
       const currentShapes = useCanvasStore.getState().shapes;
       const nextShapes = [...currentShapes];
@@ -79,6 +82,7 @@ export default function useMultiplayer(documentName) {
     });
 
     // ── 2. Sync Zustand to Yjs (Outgoing Changes) ──
+    let ySyncRaf = null;
     const unsubscribeZustand = useCanvasStore.subscribe((state, prevState) => {
       // Only sync if the shapes array actually changed
       if (state.shapes === prevState.shapes) return;
@@ -89,25 +93,28 @@ export default function useMultiplayer(documentName) {
         useCanvasStore.getState().setSyncStatus('saved');
       }, 3000);
 
-      ydoc.transact(() => {
-        // Find adds and updates
-        state.shapes.forEach((shape) => {
-          const yShape = yshapes.get(shape.id);
-          // Simple deep compare check could go here, but for now we just overwrite
-          // if it exists, or set if new.
-          if (JSON.stringify(yShape) !== JSON.stringify(shape)) {
-            yshapes.set(shape.id, shape);
-          }
-        });
+      if (ySyncRaf) cancelAnimationFrame(ySyncRaf);
+      ySyncRaf = requestAnimationFrame(() => {
+        ydoc.transact(() => {
+          // Find adds and updates
+          state.shapes.forEach((shape) => {
+            const yShape = yshapes.get(shape.id);
+            // Simple deep compare check could go here, but for now we just overwrite
+            // if it exists, or set if new.
+            if (JSON.stringify(yShape) !== JSON.stringify(shape)) {
+              yshapes.set(shape.id, shape);
+            }
+          });
 
-        // Find deletes
-        const currentIds = state.shapes.map(s => s.id);
-        const yKeys = Array.from(yshapes.keys());
-        yKeys.forEach((key) => {
-          if (!currentIds.includes(key)) {
-            yshapes.delete(key);
-          }
-        });
+          // Find deletes
+          const currentIds = state.shapes.map(s => s.id);
+          const yKeys = Array.from(yshapes.keys());
+          yKeys.forEach((key) => {
+            if (!currentIds.includes(key)) {
+              yshapes.delete(key);
+            }
+          });
+        }, 'zustand-sync');
       });
     });
 
@@ -129,6 +136,7 @@ export default function useMultiplayer(documentName) {
       const g = gen;
       const cleanup = () => {
         if (g !== mountGen.current) return;
+        if (ySyncRaf) cancelAnimationFrame(ySyncRaf);
         clearTimeout(syncTimer.current);
         unsubscribeZustand();
         newUndoManager.destroy();

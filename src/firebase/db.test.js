@@ -43,6 +43,22 @@ describe('Firestore Database Layer & RBAC (src/firebase/db.js)', () => {
       expect(firestore.setDoc).toHaveBeenCalledTimes(1);
     });
 
+    it('persists diagramType and starterShapes when provided in extraMeta', async () => {
+      const starter = [{ id: 's1', type: 'rectangle', x: 10, y: 10 }];
+      const newBoard = await createBoard('user-123', 'User Flow Sequence', {
+        diagramType: 'sequence',
+        starterShapes: starter,
+      });
+
+      expect(newBoard).toMatchObject({
+        title: 'User Flow Sequence',
+        ownerId: 'user-123',
+        diagramType: 'sequence',
+        starterShapes: starter,
+      });
+      expect(firestore.setDoc).toHaveBeenCalledTimes(1);
+    });
+
     it('throws if userId is not provided', async () => {
       await expect(createBoard('')).rejects.toThrow('User ID is required to create a board');
     });

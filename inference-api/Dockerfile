@@ -2,10 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies if needed (e.g. libglib2.0 for opencv/onnx runtime)
+# Install system dependencies if needed (e.g. libglib2.0 for opencv/onnx runtime, libgomp1 for OpenMP)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
+
 
 # Copy requirements from the build context
 COPY inference-api/requirements.txt .

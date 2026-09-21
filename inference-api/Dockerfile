@@ -33,8 +33,9 @@ RUN mkdir -p /app/ml/exports/nlp_model
 ENV NLP_MODEL_PATH=google/flan-t5-small
 ENV HF_MODEL_ID=google/flan-t5-small
 
-EXPOSE 8000
+EXPOSE 10000
 
-# Execute uvicorn server binding to Render's $PORT (or 8000 default)
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Execute uvicorn server binding to Render's $PORT (or 10000 default)
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+
 

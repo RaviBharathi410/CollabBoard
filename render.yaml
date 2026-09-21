@@ -39,7 +39,8 @@ services:
     healthCheckPath: /health
     envVars:
       - key: PORT
-        value: 8000
+        value: 10000
+
       - key: NLP_MODEL_PATH
         value: google/flan-t5-small
       - key: HF_MODEL_ID

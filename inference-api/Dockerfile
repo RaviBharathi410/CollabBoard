@@ -32,8 +32,11 @@ RUN mkdir -p /app/ml/exports/nlp_model
 # Let the NLP model loader know where to find weights (falls back to HF Hub if empty)
 ENV NLP_MODEL_PATH=google/flan-t5-small
 ENV HF_MODEL_ID=google/flan-t5-small
+ENV PYTHONUNBUFFERED=1
+ENV PORT=10000
 
 EXPOSE 10000
+
 
 # Execute uvicorn server binding to Render's $PORT (or 10000 default)
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]

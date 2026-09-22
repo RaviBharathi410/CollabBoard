@@ -100,21 +100,37 @@ async function callGeminiVision(imageBase64, context) {
 
   const base64Data = stripBase64Header(imageBase64);
   const userPromptText = buildVisionUserPrompt(context);
-  const model = genAI.getGenerativeModel({
-    model: FALLBACK_MODEL,
-    generationConfig: { responseMimeType: 'application/json' },
-  });
+  const candidates = ['gemini-3.5-flash', 'gemini-3.6-flash', FALLBACK_MODEL].filter(
+    (v, i, a) => a.indexOf(v) === i
+  );
 
-  const result = await model.generateContent([
-    VISION_SYSTEM_PROMPT,
-    userPromptText,
-    { inlineData: { data: base64Data, mimeType: 'image/png' } },
-  ]);
 
-  const text = result.response.text();
-  const parsed = parseDiagramJson(text);
-  return { parsed, modelUsed: FALLBACK_MODEL, rawText: text };
+  let lastErr = null;
+  for (const modelName of candidates) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: { responseMimeType: 'application/json' },
+      });
+
+      const result = await model.generateContent([
+        VISION_SYSTEM_PROMPT,
+        userPromptText,
+        { inlineData: { data: base64Data, mimeType: 'image/png' } },
+      ]);
+
+      const text = result.response.text();
+      const parsed = parseDiagramJson(text);
+      return { parsed, modelUsed: modelName, rawText: text };
+    } catch (err) {
+      console.warn(`[Gemini Vision] Model ${modelName} failed (${err.message}). Trying alternative candidate...`);
+      lastErr = err;
+    }
+  }
+
+  throw lastErr;
 }
+
 
 const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD || '0.85');
 
@@ -178,9 +194,13 @@ export async function analyzeDiagramVision(imageBase64, context) {
     console.warn('Primary vision model failed, falling back to Gemini:', primaryErr.message);
 
     try {
-      const result = await callGeminiVision(imageBase64, context);
+      const result = await pRetry(() => callGeminiVision(imageBase64, context), {
+        retries: 2,
+        minTimeout: 500,
+      });
       return { ...result, processingMs: Date.now() - start };
     } catch (fallbackErr) {
+
       const err = new Error('BOTH_MODELS_FAILED');
       err.cause = fallbackErr;
       throw err;

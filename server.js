@@ -137,7 +137,15 @@ async function startHocuspocus() {
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
+app.use((req, _res, next) => {
+  if (req.url.startsWith('//')) {
+    req.url = req.url.replace(/^\/+/, '/');
+  }
+  next();
+});
+
 app.use(
+
   cors({
     origin: process.env.ALLOWED_ORIGINS
       ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)

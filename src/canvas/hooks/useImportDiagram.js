@@ -3,9 +3,11 @@ import useCanvasStore from '../store/canvasStore';
 import { getAuthHeaders } from './useAIEngine';
 import { routeOrthogonalEdge, orthogonalManualArrow } from '../utils/orthogonalRouter';
 
-const API_BASE =
+const API_BASE = (
   import.meta.env.VITE_API_URL ??
-  (import.meta.env.DEV ? 'http://localhost:3001' : '');
+  (import.meta.env.DEV ? 'http://localhost:3001' : '')
+).replace(/\/+$/, '');
+
 
 let _elkInstance = null;
 async function getElk() {

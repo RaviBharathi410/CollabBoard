@@ -27,9 +27,11 @@ async function getElk() {
   _elkInstance = new ELK();
   return _elkInstance;
 }
-const API_BASE =
+const API_BASE = (
   import.meta.env.VITE_API_URL ??
-  (import.meta.env.DEV ? 'http://localhost:3001' : '');
+  (import.meta.env.DEV ? 'http://localhost:3001' : '')
+).replace(/\/+$/, '');
+
 const FETCH_TIMEOUT_MS = 30000;
 
 const INITIAL_STATE = {

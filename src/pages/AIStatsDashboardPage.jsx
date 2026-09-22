@@ -20,9 +20,11 @@ import {
 } from 'lucide-react';
 import { getAuthHeaders } from '../canvas/hooks/useAIEngine';
 
-const API_BASE =
+const API_BASE = (
   import.meta.env.VITE_API_URL ??
-  (import.meta.env.DEV ? 'http://localhost:3001' : '');
+  (import.meta.env.DEV ? 'http://localhost:3001' : '')
+).replace(/\/+$/, '');
+
 
 export default function AIStatsDashboardPage() {
   const [summary, setSummary] = useState(null);

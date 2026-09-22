@@ -115,6 +115,25 @@ export function mountAIRoutes(app) {
     });
   });
 
+  app.get('/api/health/ai-test', async (_req, res) => {
+    try {
+      const { analyzeDiagramVision } = await import('./vision.js');
+      const testImg = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const result = await analyzeDiagramVision(testImg, { diagramTypeHint: 'flowchart', skipLocal: true });
+      res.json({
+        status: 'ok',
+        modelUsed: result.modelUsed,
+        processingMs: result.processingMs,
+      });
+    } catch (err) {
+      res.status(502).json({
+        status: 'error',
+        error: err.message,
+        detail: err.cause?.message || err.message,
+      });
+    }
+  });
+
   app.post('/api/enhance', requireAuth, aiRateLimiter, async (req, res) => {
     const start = Date.now();
     try {
@@ -131,7 +150,6 @@ export function mountAIRoutes(app) {
           code: 'IMAGE_TOO_LARGE',
         });
       }
-
 
       const sid = sessionId || crypto.randomUUID();
 
@@ -151,9 +169,14 @@ export function mountAIRoutes(app) {
           return res.status(500).json({ error: 'AI service not configured', code: 'AI_NOT_CONFIGURED' });
         }
         console.error('Vision pipeline failed:', err);
+        const detailMsg = err.cause?.message || err.message;
+        const isQuota = detailMsg.includes('429') || detailMsg.toLowerCase().includes('quota');
         return res.status(502).json({
-          error: 'AI temporarily unavailable — try again',
-          code: 'BOTH_MODELS_FAILED',
+          error: isQuota
+            ? 'AI quota exceeded — add billing or retry in a moment'
+            : 'AI temporarily unavailable — try again',
+          code: isQuota ? 'AI_QUOTA_EXCEEDED' : 'BOTH_MODELS_FAILED',
+          detail: detailMsg,
         });
       }
 

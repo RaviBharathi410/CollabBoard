@@ -83,8 +83,8 @@ function parseApiError(res, body) {
   if (res.status === 404) return ERROR_MESSAGES.SESSION_EXPIRED;
   if (res.status === 502) {
     if (body?.code === 'AI_QUOTA_EXCEEDED') return ERROR_MESSAGES.AI_QUOTA_EXCEEDED;
-    const msg = body?.error || '';
-    if (msg.includes('quota') || msg.includes('429')) return ERROR_MESSAGES.AI_QUOTA_EXCEEDED;
+    const msg = body?.detail || body?.error || '';
+    if (msg.toLowerCase().includes('quota') || msg.includes('429')) return ERROR_MESSAGES.AI_QUOTA_EXCEEDED;
     return msg.length > 120 ? ERROR_MESSAGES.BOTH_MODELS_FAILED : msg || ERROR_MESSAGES.BOTH_MODELS_FAILED;
   }
   if (res.status === 500) return ERROR_MESSAGES.AI_NOT_CONFIGURED;
@@ -398,6 +398,7 @@ export default function useAIEngine(stageRef) {
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
+          console.error('[AI Engine Error]', res.status, data);
           setState((s) => ({
             ...s,
             isProcessing: false,

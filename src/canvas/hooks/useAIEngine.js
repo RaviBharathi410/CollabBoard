@@ -32,7 +32,7 @@ const API_BASE = (
   (import.meta.env.DEV ? 'http://localhost:3001' : '')
 ).replace(/\/+$/, '');
 
-const FETCH_TIMEOUT_MS = 30000;
+const FETCH_TIMEOUT_MS = 50000;
 
 const INITIAL_STATE = {
   isProcessing: false,

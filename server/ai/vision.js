@@ -140,7 +140,7 @@ async function callGeminiVision(imageBase64, context) {
       })();
 
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout after 12s on model ${modelName}`)), 12000)
+        setTimeout(() => reject(new Error(`Timeout after 35s on model ${modelName}`)), 35000)
       );
 
       return await Promise.race([generatePromise, timeoutPromise]);

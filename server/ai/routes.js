@@ -130,6 +130,7 @@ export function mountAIRoutes(app) {
         status: 'error',
         error: err.message,
         detail: err.cause?.message || err.message,
+        attempts: err.cause?.attempts,
       });
     }
   });
@@ -177,6 +178,7 @@ export function mountAIRoutes(app) {
             : 'AI temporarily unavailable — try again',
           code: isQuota ? 'AI_QUOTA_EXCEEDED' : 'BOTH_MODELS_FAILED',
           detail: detailMsg,
+          attempts: err.cause?.attempts,
         });
       }
 

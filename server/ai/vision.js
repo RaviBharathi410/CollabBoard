@@ -109,16 +109,17 @@ async function callGeminiVision(imageBase64, context) {
   const base64Data = stripBase64Header(imageBase64);
   const userPromptText = buildVisionUserPrompt(context);
   const candidates = [
-    'gemini-3.1-flash-lite',
     'gemini-3.5-flash-lite',
-    'gemini-3.8-flash',
     'gemini-3-flash-preview',
+    'gemini-3.1-flash-lite',
+    'gemini-3.8-flash',
     'gemini-3.5-flash',
     'gemini-3.6-flash',
     FALLBACK_MODEL,
   ].filter((v, i, a) => a.indexOf(v) === i);
 
   let lastErr = null;
+  const attempts = [];
   for (const modelName of candidates) {
     try {
       const generatePromise = (async () => {
@@ -145,10 +146,14 @@ async function callGeminiVision(imageBase64, context) {
       return await Promise.race([generatePromise, timeoutPromise]);
     } catch (err) {
       console.warn(`[Gemini Vision] Model ${modelName} failed (${err.message}). Trying alternative candidate...`);
+      attempts.push(`${modelName}: ${err.message}`);
       lastErr = err;
     }
   }
 
+  if (lastErr) {
+    lastErr.attempts = attempts;
+  }
   throw lastErr;
 }
 

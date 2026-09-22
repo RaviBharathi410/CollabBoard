@@ -21,9 +21,11 @@ export function useAuth() {
 /** User-facing messages for common Firebase Auth errors */
 export function formatAuthError(err) {
   const code = err?.code || '';
+  const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
   const messages = {
     'auth/unauthorized-domain':
-      'This site is not authorized in Firebase. Add localhost to Authentication → Settings → Authorized domains.',
+      `This site (${currentDomain}) is not authorized in Firebase. Add "${currentDomain}" to Authentication → Settings → Authorized domains.`,
+
     'auth/operation-not-allowed':
       'Google sign-in is disabled. Enable it in Firebase Console → Authentication → Sign-in method.',
     'auth/popup-closed-by-user': 'Sign-in was cancelled.',

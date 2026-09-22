@@ -123,13 +123,15 @@ export function mountAIRoutes(app) {
       const { imageBase64, existingShapes, diagramTypeHint, instruction, sessionId } = req.body;
       if (!imageBase64) return res.status(400).json({ error: 'No image provided' });
 
+      const MAX_IMAGE_TOKENS = parseInt(process.env.MAX_IMAGE_TOKENS || '15000', 10);
       const tokens = await estimateImageTokens(imageBase64);
-      if (tokens > 3500) {
+      if (tokens > MAX_IMAGE_TOKENS) {
         return res.status(413).json({
           error: 'Canvas too complex — select a region first.',
           code: 'IMAGE_TOO_LARGE',
         });
       }
+
 
       const sid = sessionId || crypto.randomUUID();
 
@@ -222,13 +224,15 @@ export function mountAIRoutes(app) {
         return res.status(400).json({ error: 'imageBase64 and question are required' });
       }
 
+      const MAX_IMAGE_TOKENS = parseInt(process.env.MAX_IMAGE_TOKENS || '15000', 10);
       const tokens = await estimateImageTokens(imageBase64);
-      if (tokens > 3500) {
+      if (tokens > MAX_IMAGE_TOKENS) {
         return res.status(413).json({
           error: 'Canvas too complex — select a region first.',
           code: 'IMAGE_TOO_LARGE',
         });
       }
+
 
       const safeHistory = (conversationHistory || [])
         .filter((m) => m?.role && m?.content && typeof m.content === 'string')

@@ -352,8 +352,9 @@ export default function useAIEngine(stageRef) {
             pixelRatio: 1.5,
           });
         } else {
-          imageBase64 = stageRef.current.toDataURL({ pixelRatio: 1 });
+          imageBase64 = stageRef.current.toDataURL({ pixelRatio: 0.75 });
         }
+
 
         const existingShapes = summarizeShapes(useCanvasStore.getState().shapes);
         const sessionId = crypto.randomUUID();
